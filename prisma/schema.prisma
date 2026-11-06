@@ -1,0 +1,123 @@
+// Modelo de dominio de Plata.
+//
+// Regla de oro: la plata se guarda en unidades menores enteras (Int), nunca en float.
+// Para COP la unidad menor es el peso (decimales = 0), así que 1.800.000 se guarda como 1800000.
+//
+// Regla de oro 2: una cuenta (efectivo/banco) NO es lo mismo que una tarjeta de crédito.
+// Un gasto con tarjeta es deuda, no salida de efectivo. Por eso `accountId` y `creditCardId`
+// son campos distintos y una transacción puede tener uno, el otro, o ambos (pago de tarjeta).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  runtime  = "nodejs"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum AccountType {
+  CASH
+  BANK
+  SAVINGS
+  WALLET
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+}
+
+enum CategoryType {
+  INCOME
+  EXPENSE
+}
+
+model Account {
+  id                  String        @id @default(cuid())
+  name                String
+  type                AccountType
+  initialBalanceMinor Int           @default(0)
+  archived            Boolean       @default(false)
+  createdAt           DateTime      @default(now())
+
+  transactions  Transaction[] @relation("AccountSource")
+  transfersIn   Transaction[] @relation("AccountDestination")
+
+  @@index([archived])
+}
+
+model CreditCard {
+  id         String    @id @default(cuid())
+  name       String
+  limitMinor Int
+  closingDay Int
+  dueDay     Int
+  archived   Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+
+  transactions Transaction[]
+
+  @@index([archived])
+}
+
+model Category {
+  id       String       @id @default(cuid())
+  name     String
+  type     CategoryType
+  color    String       @default("#64748b")
+  icon     String?
+  parentId String?
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children Category[] @relation("CategoryTree")
+
+  transactions Transaction[]
+  budgets      Budget[]
+
+  @@unique([name, type, parentId])
+  @@index([parentId])
+}
+
+model Transaction {
+  id          String          @id @default(cuid())
+  date        DateTime
+  type        TransactionType
+  amountMinor Int
+  description String
+  notes       String?
+
+  // Cuenta de origen (EXPENSE/TRANSFER) o destino (INCOME).
+  accountId String?
+  // Cuenta destino en una transferencia entre cuentas propias.
+  transferAccountId String?
+  // Tarjeta involucrada: compra con tarjeta (EXPENSE) o pago de tarjeta (TRANSFER).
+  creditCardId String?
+  categoryId   String?
+
+  createdAt DateTime @default(now())
+
+  account         Account?    @relation("AccountSource", fields: [accountId], references: [id], onDelete: Restrict)
+  transferAccount Account?    @relation("AccountDestination", fields: [transferAccountId], references: [id], onDelete: Restrict)
+  creditCard      CreditCard? @relation(fields: [creditCardId], references: [id], onDelete: Restrict)
+  category        Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([date])
+  @@index([categoryId])
+  @@index([accountId])
+  @@index([creditCardId])
+}
+
+model Budget {
+  id         String @id @default(cuid())
+  categoryId String
+  month      String // "YYYY-MM"
+  limitMinor Int
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, month])
+  @@index([month])
+}
