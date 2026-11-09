@@ -310,6 +310,7 @@ export async function upsertBudget(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const id = str(formData, "id");
   const categoryId = str(formData, "categoryId");
   const month = str(formData, "month");
   const limitMinor = parseAmountToMinor(str(formData, "limit"));
@@ -322,6 +323,21 @@ export async function upsertBudget(
   }
   if (!limitMinor) {
     return { ok: false, message: "El límite debe ser mayor a cero." };
+  }
+
+  if (id) {
+    const existing = await prisma.budget.findUnique({ where: { id } });
+    if (!existing) {
+      return { ok: false, message: "Ese presupuesto ya no existe." };
+    }
+
+    await prisma.budget.update({
+      where: { id },
+      data: { limitMinor },
+    });
+
+    refreshAll();
+    return { ok: true, message: "Presupuesto actualizado." };
   }
 
   await prisma.budget.upsert({

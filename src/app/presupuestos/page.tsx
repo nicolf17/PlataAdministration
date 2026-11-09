@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { connection } from "next/server";
 
 import { BudgetForm } from "@/components/budget-form";
@@ -14,12 +15,15 @@ export const instant = false;
 export default async function BudgetsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mes?: string }>;
+  searchParams: Promise<{ mes?: string; editar?: string }>;
 }) {
   const params = await searchParams;
   await connection();
   const month = isValidMonthKey(params.mes) ? params.mes : currentMonthKey();
   const data = await getBudgetPageData(month);
+  const editing = params.editar
+    ? data.budgets.find((budget) => budget.id === params.editar)
+    : undefined;
 
   const totalLimit = data.budgets.reduce((sum, b) => sum + b.limitMinor, 0);
   const totalSpent = data.budgets.reduce((sum, b) => sum + b.spentMinor, 0);
@@ -67,7 +71,25 @@ export default async function BudgetsPage({
       </div>
 
       <div className="mt-4">
-        <BudgetForm month={month} categories={data.categories} />
+        {editing ? (
+          <h2 className="mb-2 text-sm font-semibold">
+            Editar límite de {editing.categoryName}
+          </h2>
+        ) : null}
+        <BudgetForm
+          month={month}
+          categories={data.categories}
+          initial={
+            editing
+              ? {
+                  id: editing.id,
+                  categoryId: editing.categoryId,
+                  categoryName: editing.categoryName,
+                  limitMinor: editing.limitMinor,
+                }
+              : undefined
+          }
+        />
       </div>
 
       <section className="mt-4">
@@ -113,12 +135,20 @@ export default async function BudgetsPage({
                       {formatMoney(budget.spentMinor)} de{" "}
                       {formatMoney(budget.limitMinor)}
                     </span>
-                    <span
-                      className={`tabular-nums ${over ? "text-danger" : "text-accent"}`}
-                    >
-                      {over
-                        ? `${formatMoney(Math.abs(remaining))} de más`
-                        : `${formatMoney(remaining)} libres`}
+                    <span className="flex items-center gap-3">
+                      <span
+                        className={`tabular-nums ${over ? "text-danger" : "text-accent"}`}
+                      >
+                        {over
+                          ? `${formatMoney(Math.abs(remaining))} de más`
+                          : `${formatMoney(remaining)} libres`}
+                      </span>
+                      <Link
+                        href={`/presupuestos?mes=${month}&editar=${budget.id}#presupuesto-form`}
+                        className="font-medium text-muted underline-offset-2 hover:text-foreground hover:underline"
+                      >
+                        Editar
+                      </Link>
                     </span>
                   </div>
                 </article>

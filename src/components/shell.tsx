@@ -1,7 +1,7 @@
 import Link from "next/link";
 
-import { IconPlus } from "@/components/icons";
 import { NavLinks } from "@/components/nav-links";
+import { NewMovementButton } from "@/components/new-movement-button";
 
 export function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -33,13 +33,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </span>
         </Link>
 
-        <Link
-          href="/movimientos#nuevo"
-          className="inline-flex items-center gap-1 rounded-full bg-accent px-3 py-1.5 text-[11px] font-bold text-[#04231b]"
-        >
-          <IconPlus className="size-3.5" />
-          Nuevo
-        </Link>
+        <NewMovementButton />
       </header>
 
       <main className="flex-1 pb-28 md:pb-12">

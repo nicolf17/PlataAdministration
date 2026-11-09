@@ -42,7 +42,7 @@ export default async function DashboardPage({
         description={`Resumen de ${monthLabel(month)}`}
       >
         <MonthPicker month={month} basePath="/" />
-        <Link href="/movimientos" className="btn btn-primary">
+        <Link href="/movimientos#nuevo" className="btn btn-primary">
           <IconPlus className="size-4" />
           Nuevo movimiento
         </Link>
