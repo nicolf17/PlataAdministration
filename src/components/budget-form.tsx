@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 
 import { upsertBudget, type ActionState } from "@/app/actions";
+import { AmountInput } from "@/components/amount-input";
 
 export function BudgetForm({
   month,
@@ -24,7 +25,13 @@ export function BudgetForm({
         <label className="label" htmlFor="budget-category">
           Categoría
         </label>
-        <select id="budget-category" name="categoryId" className="input" required defaultValue="">
+        <select
+          id="budget-category"
+          name="categoryId"
+          className="input"
+          required
+          defaultValue=""
+        >
           <option value="">Elegir…</option>
           {categories.map((category) => (
             <option key={category.id} value={category.id}>
@@ -38,18 +45,17 @@ export function BudgetForm({
         <label className="label" htmlFor="budget-limit">
           Límite del mes
         </label>
-        <input
+        <AmountInput
           id="budget-limit"
           name="limit"
-          inputMode="decimal"
-          placeholder="500000"
+          placeholder="500.000"
           className="input tabular-nums"
           required
         />
       </div>
 
-      <button type="submit" className="btn btn-primary" disabled={pending}>
-        {pending ? "Guardando…" : "Guardar"}
+      <button type="submit" className="btn btn-primary w-full sm:w-auto" disabled={pending}>
+        {pending ? "Guardando…" : "Guardar límite"}
       </button>
 
       {state ? (

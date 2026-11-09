@@ -11,7 +11,7 @@ function meta(row: TransactionRow): string {
     const to = row.transferAccountName ?? row.cardName ?? "—";
     return `${row.accountName ?? "—"} → ${to}`;
   }
-  const place = row.cardName ? `Tarjeta ${row.cardName}` : row.accountName;
+  const place = row.cardName ?? row.accountName;
   return [row.categoryName, place].filter(Boolean).join(" · ");
 }
 

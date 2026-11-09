@@ -128,7 +128,7 @@ export async function deleteTransaction(formData: FormData): Promise<void> {
   refreshAll();
 }
 
-const accountTypes = ["CASH", "BANK", "SAVINGS", "WALLET"] as const;
+const accountTypes = ["CASH", "SAVINGS"] as const;
 
 export async function createAccount(
   _prev: ActionState,
@@ -153,6 +153,98 @@ export async function createAccount(
 
   refreshAll();
   return { ok: true, message: "Cuenta creada." };
+}
+
+export async function deleteAccount(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const id = str(formData, "id");
+  if (!id) return { ok: false, message: "Cuenta inválida." };
+
+  const used = await prisma.transaction.count({
+    where: { OR: [{ accountId: id }, { transferAccountId: id }] },
+  });
+
+  if (used > 0) {
+    return {
+      ok: false,
+      message: "Tiene movimientos. No se puede eliminar sin perder historial.",
+    };
+  }
+
+  await prisma.account.delete({ where: { id } });
+  refreshAll();
+  return { ok: true, message: "Cuenta eliminada." };
+}
+
+const CATEGORY_COLORS = [
+  "#34d399",
+  "#60a5fa",
+  "#f59e0b",
+  "#a78bfa",
+  "#f87171",
+  "#22d3ee",
+  "#fb7185",
+  "#a3e635",
+];
+
+export async function createCategory(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const name = str(formData, "name");
+  if (name.length < 2) {
+    return { ok: false, message: "Escribí un nombre de al menos 2 letras." };
+  }
+  if (name.length > 30) {
+    return { ok: false, message: "El nombre no puede pasar de 30 letras." };
+  }
+
+  const type = z.enum(["INCOME", "EXPENSE"]).safeParse(str(formData, "type"));
+  if (!type.success) {
+    return { ok: false, message: "Tipo de categoría inválido." };
+  }
+
+  const existing = await prisma.category.findFirst({
+    where: { name, type: type.data, parentId: null },
+    select: { id: true },
+  });
+  if (existing) {
+    return { ok: false, message: "Ya existe una categoría con ese nombre." };
+  }
+
+  const count = await prisma.category.count({ where: { type: type.data } });
+  await prisma.category.create({
+    data: {
+      name,
+      type: type.data,
+      color: CATEGORY_COLORS[count % CATEGORY_COLORS.length],
+    },
+  });
+
+  refreshAll();
+  return { ok: true, message: "Categoría creada." };
+}
+
+export async function deleteCategory(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const id = str(formData, "id");
+  if (!id) return { ok: false, message: "Categoría inválida." };
+
+  const used = await prisma.transaction.count({ where: { categoryId: id } });
+  await prisma.category.delete({ where: { id } });
+  refreshAll();
+
+  return {
+    ok: true,
+    message:
+      used > 0
+        ? `Categoría eliminada. ${used} movimientos quedaron sin categoría.`
+        : "Categoría eliminada.",
+  };
 }
 
 export async function createCreditCard(
@@ -189,6 +281,29 @@ export async function createCreditCard(
 
   refreshAll();
   return { ok: true, message: "Tarjeta creada." };
+}
+
+export async function deleteCreditCard(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const id = str(formData, "id");
+  if (!id) return { ok: false, message: "Tarjeta inválida." };
+
+  const used = await prisma.transaction.count({
+    where: { creditCardId: id },
+  });
+
+  if (used > 0) {
+    return {
+      ok: false,
+      message: "Tiene movimientos. No se puede eliminar sin perder historial.",
+    };
+  }
+
+  await prisma.creditCard.delete({ where: { id } });
+  refreshAll();
+  return { ok: true, message: "Tarjeta eliminada." };
 }
 
 export async function upsertBudget(

@@ -88,6 +88,19 @@ export default async function DashboardPage({
           <RecommendationsPanel items={data.recommendations} />
 
           <section className="card p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Últimos movimientos</h2>
+              <Link
+                href={`/movimientos?mes=${month}`}
+                className="text-[11px] font-medium text-muted hover:text-foreground"
+              >
+                {monthLabel(month)}
+              </Link>
+            </div>
+            <RecentList rows={data.recent} />
+          </section>
+
+          <section className="card p-4">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-sm font-semibold">Gastos por categoría</h2>
               <Link
@@ -128,16 +141,6 @@ export default async function DashboardPage({
               </ul>
             )}
           </section>
-
-          <section className="card p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Últimos movimientos</h2>
-              <span className="text-[11px] text-muted">
-                {monthLabel(month)}
-              </span>
-            </div>
-            <RecentList rows={data.recent} />
-          </section>
         </div>
 
         <div className="space-y-4">
@@ -167,9 +170,11 @@ export default async function DashboardPage({
                       <p className="truncate text-[13px] font-medium">
                         {account.name}
                       </p>
-                      <p className="text-[11px] text-muted">
-                        {ACCOUNT_TYPE_LABEL[account.type]}
-                      </p>
+                      {ACCOUNT_TYPE_LABEL[account.type] !== account.name ? (
+                        <p className="text-[11px] text-muted">
+                          {ACCOUNT_TYPE_LABEL[account.type]}
+                        </p>
+                      ) : null}
                     </div>
                     <span
                       className={`shrink-0 text-[13px] font-semibold tabular-nums ${

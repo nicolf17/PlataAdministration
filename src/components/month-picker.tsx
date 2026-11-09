@@ -15,23 +15,23 @@ export function MonthPicker({
   const isCurrent = month === currentMonthKey();
 
   return (
-    <div className="flex items-center gap-1 rounded-xl border border-line bg-surface/70 p-1">
+    <div className="flex w-full items-center gap-1 rounded-xl border border-line bg-surface/70 p-1 sm:w-auto">
       <Link
         href={`${basePath}?mes=${previous}`}
         aria-label="Mes anterior"
-        className="grid size-8 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+        className="grid size-9 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
       >
         <IconChevronLeft className="size-4" />
       </Link>
 
-      <span className="min-w-36 text-center text-sm font-medium capitalize">
+      <span className="min-w-0 flex-1 text-center text-sm font-medium capitalize sm:min-w-36 sm:flex-none">
         {monthLabel(month)}
       </span>
 
       <Link
         href={`${basePath}?mes=${next}`}
         aria-label="Mes siguiente"
-        className="grid size-8 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+        className="grid size-9 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
       >
         <IconChevronRight className="size-4" />
       </Link>
@@ -39,7 +39,7 @@ export function MonthPicker({
       {!isCurrent ? (
         <Link
           href={basePath}
-          className="ml-1 rounded-lg px-2 py-1 text-[11px] font-medium text-accent hover:bg-accent-soft"
+          className="shrink-0 rounded-lg px-2 py-1 text-[11px] font-medium text-accent hover:bg-accent-soft"
         >
           Hoy
         </Link>

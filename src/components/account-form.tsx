@@ -3,12 +3,11 @@
 import { useActionState } from "react";
 
 import { createAccount, type ActionState } from "@/app/actions";
+import { AmountInput } from "@/components/amount-input";
 
 const TYPES = [
   { value: "CASH", label: "Efectivo" },
-  { value: "BANK", label: "Cuenta bancaria" },
-  { value: "SAVINGS", label: "Ahorros" },
-  { value: "WALLET", label: "Billetera digital" },
+  { value: "SAVINGS", label: "Cuenta de ahorros" },
 ];
 
 export function AccountForm() {
@@ -20,9 +19,9 @@ export function AccountForm() {
   return (
     <details className="card group p-4 open:pb-5">
       <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-semibold">
-        Agregar cuenta
+        Agregar efectivo o cuenta
         <span className="text-xs font-normal text-muted group-open:hidden">
-          Efectivo, banco, ahorros…
+          Efectivo o ahorros
         </span>
       </summary>
 
@@ -34,7 +33,7 @@ export function AccountForm() {
           <input
             id="account-name"
             name="name"
-            placeholder="Ej: Cuenta Davivienda"
+            placeholder="Ej: Cuenta de ahorros"
             className="input"
             required
           />
@@ -44,7 +43,12 @@ export function AccountForm() {
           <label className="label" htmlFor="account-type">
             Tipo
           </label>
-          <select id="account-type" name="type" className="input" defaultValue="BANK">
+          <select
+            id="account-type"
+            name="type"
+            className="input"
+            defaultValue="SAVINGS"
+          >
             {TYPES.map((type) => (
               <option key={type.value} value={type.value}>
                 {type.label}
@@ -57,29 +61,29 @@ export function AccountForm() {
           <label className="label" htmlFor="account-initial">
             Saldo inicial
           </label>
-          <input
+          <AmountInput
             id="account-initial"
             name="initial"
-            inputMode="decimal"
             placeholder="0"
             className="input tabular-nums"
           />
         </div>
 
         <div className="flex items-end gap-3">
-          <button type="submit" className="btn btn-primary" disabled={pending}>
-            {pending ? "Creando…" : "Crear cuenta"}
+          <button type="submit" className="btn btn-primary w-full sm:w-auto" disabled={pending}>
+            {pending ? "Creando…" : "Crear"}
           </button>
-          {state ? (
-            <p
-              className={`text-[11px] font-medium ${
-                state.ok ? "text-accent" : "text-danger"
-              }`}
-            >
-              {state.message}
-            </p>
-          ) : null}
         </div>
+
+        {state ? (
+          <p
+            className={`text-[11px] font-medium sm:col-span-2 ${
+              state.ok ? "text-accent" : "text-danger"
+            }`}
+          >
+            {state.message}
+          </p>
+        ) : null}
       </form>
     </details>
   );

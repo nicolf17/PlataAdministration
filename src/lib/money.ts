@@ -61,3 +61,17 @@ export function formatPercent(ratio: number): string {
     maximumFractionDigits: 0,
   }).format(ratio);
 }
+
+const amountInputFormatter = new Intl.NumberFormat(CURRENCY.locale, {
+  maximumFractionDigits: 0,
+});
+
+/**
+ * Formatea lo que el usuario escribe en un input de monto: 15000 -> "15.000".
+ * Los puntos son de miles (COP no usa centavos); el server los vuelve a parsear.
+ */
+export function formatAmountInput(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return "";
+  return amountInputFormatter.format(Number(digits));
+}

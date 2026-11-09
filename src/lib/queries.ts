@@ -443,3 +443,14 @@ export async function getBudgetPageData(month: string) {
     expenseMinor: categoryData.expenseMinor,
   };
 }
+
+export async function getCategoriesPageData() {
+  const categories = await prisma.category.findMany({
+    orderBy: [{ type: "asc" }, { name: "asc" }],
+    include: {
+      _count: { select: { transactions: true } },
+    },
+  });
+
+  return categories;
+}

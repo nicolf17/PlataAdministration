@@ -1,8 +1,11 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState } from "react";
 
 import { createTransaction, type ActionState } from "@/app/actions";
+import { AmountInput } from "@/components/amount-input";
 import { IconPlus } from "@/components/icons";
 
 type AccountOption = { id: string; name: string };
@@ -19,7 +22,7 @@ type TxType = "EXPENSE" | "INCOME" | "TRANSFER";
 const TYPES: Array<{ value: TxType; label: string }> = [
   { value: "EXPENSE", label: "Gasto" },
   { value: "INCOME", label: "Ingreso" },
-  { value: "TRANSFER", label: "Transferencia" },
+  { value: "TRANSFER", label: "Transferir" },
 ];
 
 export function TransactionForm({
@@ -38,77 +41,76 @@ export function TransactionForm({
     null,
   );
   const [type, setType] = useState<TxType>("EXPENSE");
-  const [payer, setPayer] = useState("");
-  const [destination, setDestination] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
+  const router = useRouter();
 
   useEffect(() => {
     if (state?.ok) {
       formRef.current?.reset();
-      setPayer("");
-      setDestination("");
+      // Refresca la lista de movimientos de esta pantalla y el dashboard.
+      router.refresh();
     }
-  }, [state]);
+  }, [state, router]);
 
   function changeType(next: TxType) {
     setType(next);
-    setPayer("");
-    setDestination("");
   }
 
-  const byParent = new Map<string, CategoryOption>();
-  for (const category of categories) {
-    byParent.set(category.id, category);
-  }
-
-  const visibleCategories = categories
-    .filter((category) => category.type === type)
-    .map((category) => ({
-      ...category,
-      label: category.parentId
-        ? `${byParent.get(category.parentId)?.name ?? "Otra"} · ${category.name}`
-        : category.name,
-    }));
+  const visibleCategories = categories.filter(
+    (category) => category.type === type,
+  );
 
   return (
-    <form ref={formRef} action={formAction} className="card p-4 md:p-5">
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <h2 className="mr-auto text-sm font-semibold">Nuevo movimiento</h2>
-        <input type="hidden" name="type" value={type} />
-        <div className="flex rounded-xl border border-line bg-[#0a1119] p-1">
-          {TYPES.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => changeType(option.value)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                type === option.value
-                  ? "bg-surface-2 text-foreground shadow-sm"
-                  : "text-muted hover:text-foreground"
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+    <form
+      id="nuevo"
+      ref={formRef}
+      action={formAction}
+      className="card scroll-mt-20 p-4 sm:p-5"
+    >
+      <input type="hidden" name="type" value={type} />
+
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">Nuevo movimiento</h2>
+        <span className="text-[10px] text-muted">Se guarda al instante</span>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div>
-          <label className="label" htmlFor="amount">
-            Monto
-          </label>
-          <input
+      <div className="grid grid-cols-3 gap-1 rounded-xl border border-line bg-[#0a1119] p-1">
+        {TYPES.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => changeType(option.value)}
+            className={`rounded-lg py-2 text-[12px] font-medium transition-colors ${
+              type === option.value
+                ? "bg-surface-2 text-foreground shadow-sm"
+                : "text-muted hover:text-foreground"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3">
+        <label className="label" htmlFor="amount">
+          Monto
+        </label>
+        <div className="relative">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lg font-medium text-muted">
+            $
+          </span>
+          <AmountInput
             id="amount"
             name="amount"
-            inputMode="decimal"
-            placeholder="45000"
-            autoComplete="off"
-            className="input tabular-nums"
+            placeholder="0"
+            enterKeyHint="next"
+            className="input pl-8 text-2xl font-semibold tabular-nums"
             required
           />
         </div>
+      </div>
 
+      <div className="mt-3 grid grid-cols-2 gap-3">
         <div>
           <label className="label" htmlFor="date">
             Fecha
@@ -123,58 +125,102 @@ export function TransactionForm({
           />
         </div>
 
-        <div className="lg:col-span-2">
-          <label className="label" htmlFor="description">
-            Descripción
-          </label>
-          <input
-            id="description"
-            name="description"
-            placeholder="Ej: mercado del sábado"
-            maxLength={80}
-            className="input"
-            required
-          />
-        </div>
-
         {type !== "TRANSFER" ? (
           <div>
             <label className="label" htmlFor="categoryId">
               Categoría
             </label>
-            <select id="categoryId" name="categoryId" className="input" defaultValue="">
+            <select
+              id="categoryId"
+              name="categoryId"
+              className="input"
+              defaultValue=""
+            >
               <option value="">Sin categoría</option>
               {visibleCategories.map((category) => (
                 <option key={category.id} value={category.id}>
-                  {category.label}
+                  {category.name}
                 </option>
               ))}
             </select>
           </div>
         ) : null}
+      </div>
 
-        <div className={type === "TRANSFER" ? "sm:col-span-1" : "sm:col-span-1 lg:col-span-2"}>
-          <label className="label" htmlFor="payer">
-            {type === "TRANSFER" ? "Desde" : "Cuenta o tarjeta"}
+      <div className="mt-3">
+        <label className="label" htmlFor="description">
+          Descripción
+        </label>
+        <input
+          id="description"
+          name="description"
+          placeholder="Ej: mercado del sábado"
+          maxLength={80}
+          enterKeyHint="done"
+          className="input"
+          required
+        />
+      </div>
+
+      <div className="mt-3">
+        <label className="label" htmlFor="payer">
+          {type === "TRANSFER"
+            ? "Desde"
+            : type === "INCOME"
+              ? "¿Dónde entró?"
+              : "¿Con qué pagaste?"}
+        </label>
+        <select
+          id="payer"
+          name="payer"
+          className="input"
+          key={type}
+          defaultValue=""
+          required
+        >
+          <option value="">Elegir…</option>
+          <optgroup label="Efectivo / cuentas">
+            {accounts.map((account) => (
+              <option key={account.id} value={`account:${account.id}`}>
+                {account.name}
+              </option>
+            ))}
+          </optgroup>
+          {type !== "INCOME" && cards.length > 0 ? (
+            <optgroup label="Tarjetas de crédito">
+              {cards.map((card) => (
+                <option key={card.id} value={`card:${card.id}`}>
+                  {card.name}
+                </option>
+              ))}
+            </optgroup>
+          ) : null}
+        </select>
+      </div>
+
+      {type === "TRANSFER" ? (
+        <div className="mt-3">
+          <label className="label" htmlFor="destination">
+            Hacia
           </label>
           <select
-            id="payer"
-            name="payer"
+            id="destination"
+            name="destination"
             className="input"
-            value={payer}
-            onChange={(event) => setPayer(event.target.value)}
+            key={type}
+            defaultValue=""
             required
           >
             <option value="">Elegir…</option>
-            <optgroup label="Cuentas">
+            <optgroup label="Efectivo / cuentas">
               {accounts.map((account) => (
                 <option key={account.id} value={`account:${account.id}`}>
                   {account.name}
                 </option>
               ))}
             </optgroup>
-            {type !== "INCOME" && cards.length > 0 ? (
-              <optgroup label="Tarjetas de crédito">
+            {cards.length > 0 ? (
+              <optgroup label="Pago de tarjeta">
                 {cards.map((card) => (
                   <option key={card.id} value={`card:${card.id}`}>
                     {card.name}
@@ -184,60 +230,40 @@ export function TransactionForm({
             ) : null}
           </select>
         </div>
+      ) : null}
 
-        {type === "TRANSFER" ? (
-          <div className="sm:col-span-1">
-            <label className="label" htmlFor="destination">
-              Hacia
-            </label>
-            <select
-              id="destination"
-              name="destination"
-              className="input"
-              value={destination}
-              onChange={(event) => setDestination(event.target.value)}
-              required
-            >
-              <option value="">Elegir…</option>
-              <optgroup label="Cuentas">
-                {accounts.map((account) => (
-                  <option key={account.id} value={`account:${account.id}`}>
-                    {account.name}
-                  </option>
-                ))}
-              </optgroup>
-              {cards.length > 0 ? (
-                <optgroup label="Pago de tarjeta">
-                  {cards.map((card) => (
-                    <option key={card.id} value={`card:${card.id}`}>
-                      {card.name}
-                    </option>
-                  ))}
-                </optgroup>
-              ) : null}
-            </select>
-          </div>
-        ) : null}
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button type="submit" className="btn btn-primary" disabled={pending}>
+      <div className="mt-4">
+        <button
+          type="submit"
+          className="btn btn-primary w-full sm:w-auto"
+          disabled={pending}
+        >
           <IconPlus className="size-4" />
-          {pending ? "Guardando…" : "Agregar"}
+          {pending ? "Guardando…" : "Agregar movimiento"}
         </button>
 
-        <p className="text-[11px] leading-relaxed text-muted">
+        <p className="mt-2 text-[11px] leading-relaxed text-muted">
           {type === "EXPENSE"
-            ? "Con tarjeta queda como deuda; con cuenta sale del saldo."
+            ? "Con tarjeta queda como deuda; con efectivo o cuenta sale del saldo."
             : type === "TRANSFER"
-              ? "Entre cuentas propias no es gasto. Hacia una tarjeta, es pago de deuda."
+              ? "Entre tus cuentas no es gasto. Hacia una tarjeta, es pago de deuda."
               : "Suma al saldo de la cuenta elegida."}
         </p>
+
+        {visibleCategories.length === 0 && type !== "TRANSFER" ? (
+          <p className="mt-1 text-[11px] text-warning">
+            No tenés categorías de{" "}
+            {type === "EXPENSE" ? "gasto" : "ingreso"}.{" "}
+            <Link href="/categorias" className="underline">
+              Crear una
+            </Link>
+          </p>
+        ) : null}
 
         {state ? (
           <p
             role="status"
-            className={`ml-auto text-[11px] font-medium ${
+            className={`mt-2 text-[12px] font-medium ${
               state.ok ? "text-accent" : "text-danger"
             }`}
           >

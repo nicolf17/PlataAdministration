@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 
 import { createCreditCard, type ActionState } from "@/app/actions";
+import { AmountInput } from "@/components/amount-input";
 
 export function CardForm() {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
@@ -20,14 +21,14 @@ export function CardForm() {
       </summary>
 
       <form action={formAction} className="mt-4 grid gap-3 sm:grid-cols-2">
-        <div>
+        <div className="sm:col-span-2">
           <label className="label" htmlFor="card-name">
             Nombre
           </label>
           <input
             id="card-name"
             name="name"
-            placeholder="Ej: Visa Davivienda"
+            placeholder="Ej: Tarjeta de crédito"
             className="input"
             required
           />
@@ -37,62 +38,64 @@ export function CardForm() {
           <label className="label" htmlFor="card-limit">
             Cupo total
           </label>
-          <input
+          <AmountInput
             id="card-limit"
             name="limit"
-            inputMode="decimal"
-            placeholder="3000000"
+            placeholder="3.000.000"
             className="input tabular-nums"
             required
           />
         </div>
 
-        <div>
-          <label className="label" htmlFor="card-closing">
-            Día de corte
-          </label>
-          <input
-            id="card-closing"
-            name="closingDay"
-            type="number"
-            min={1}
-            max={31}
-            defaultValue={25}
-            className="input"
-            required
-          />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label" htmlFor="card-closing">
+              Día de corte
+            </label>
+            <input
+              id="card-closing"
+              name="closingDay"
+              type="number"
+              min={1}
+              max={31}
+              defaultValue={25}
+              className="input"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="label" htmlFor="card-due">
+              Día de pago
+            </label>
+            <input
+              id="card-due"
+              name="dueDay"
+              type="number"
+              min={1}
+              max={31}
+              defaultValue={10}
+              className="input"
+              required
+            />
+          </div>
         </div>
 
-        <div>
-          <label className="label" htmlFor="card-due">
-            Día de pago
-          </label>
-          <input
-            id="card-due"
-            name="dueDay"
-            type="number"
-            min={1}
-            max={31}
-            defaultValue={10}
-            className="input"
-            required
-          />
-        </div>
-
-        <div className="flex items-end gap-3 sm:col-span-2">
-          <button type="submit" className="btn btn-primary" disabled={pending}>
+        <div className="sm:col-span-2">
+          <button type="submit" className="btn btn-primary w-full sm:w-auto" disabled={pending}>
             {pending ? "Creando…" : "Crear tarjeta"}
           </button>
-          {state ? (
-            <p
-              className={`text-[11px] font-medium ${
-                state.ok ? "text-accent" : "text-danger"
-              }`}
-            >
-              {state.message}
-            </p>
-          ) : null}
         </div>
+
+        {state ? (
+          <p
+            className={`text-[11px] font-medium sm:col-span-2 ${
+              state.ok ? "text-accent" : "text-danger"
+            }`}
+          >
+            {state.message}
+          </p>
+        ) : null}
       </form>
     </details>
   );

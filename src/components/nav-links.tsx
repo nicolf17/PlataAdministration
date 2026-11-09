@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 import {
   IconDashboard,
+  IconTag,
   IconTarget,
   IconTransactions,
   IconWallet,
@@ -13,11 +14,16 @@ import {
 const ITEMS = [
   { href: "/", label: "Panel", Icon: IconDashboard },
   { href: "/movimientos", label: "Movimientos", Icon: IconTransactions },
-  { href: "/presupuestos", label: "Presupuestos", Icon: IconTarget },
-  { href: "/cuentas", label: "Cuentas", Icon: IconWallet },
+  { href: "/presupuestos", label: "Presupuesto", Icon: IconTarget },
+  { href: "/cuentas", label: "Métodos", Icon: IconWallet },
+  { href: "/categorias", label: "Categorías", Icon: IconTag },
 ];
 
-export function NavLinks({ variant = "sidebar" }: { variant?: "sidebar" | "mobile" }) {
+export function NavLinks({
+  variant = "sidebar",
+}: {
+  variant?: "sidebar" | "mobile";
+}) {
   const pathname = usePathname();
 
   return (
@@ -25,7 +31,7 @@ export function NavLinks({ variant = "sidebar" }: { variant?: "sidebar" | "mobil
       className={
         variant === "sidebar"
           ? "flex flex-col gap-1"
-          : "grid grid-cols-4 gap-1 px-2"
+          : "grid grid-cols-5 gap-0.5 px-1"
       }
     >
       {ITEMS.map(({ href, label, Icon }) => {
@@ -37,17 +43,17 @@ export function NavLinks({ variant = "sidebar" }: { variant?: "sidebar" | "mobil
             key={href}
             href={href}
             className={[
-              "flex items-center gap-3 rounded-xl text-sm transition-colors",
-              variant === "sidebar" ? "px-3 py-2.5" : "flex-col gap-1 px-1 py-2 text-[10px]",
+              "flex items-center rounded-xl transition-colors",
+              variant === "sidebar"
+                ? "gap-3 px-3 py-2.5 text-sm"
+                : "flex-col gap-0.5 px-0.5 py-2 text-[10px]",
               active
                 ? "bg-accent-soft text-accent"
                 : "text-muted hover:bg-surface-2 hover:text-foreground",
             ].join(" ")}
           >
             <Icon className={variant === "sidebar" ? "size-4.5" : "size-5"} />
-            <span className={variant === "sidebar" ? "font-medium" : "font-medium"}>
-              {label}
-            </span>
+            <span className="truncate font-medium">{label}</span>
           </Link>
         );
       })}
