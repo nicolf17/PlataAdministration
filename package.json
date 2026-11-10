@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "db:migrate": "prisma migrate dev",
+    "db:bootstrap": "node prisma/bootstrap.mjs",
     "db:setup": "prisma generate && prisma migrate deploy && prisma db seed",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
