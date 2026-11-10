@@ -71,7 +71,7 @@ export function buildRecommendations(
       detail:
         "Registrá tu salario o entradas para que los indicadores y las recomendaciones tengan sentido.",
       action: "Registrar ingreso",
-      href: `/?mes=${month}`,
+      href: `/movimientos?mes=${month}&tipo=INCOME#nuevo`,
     });
   } else if (savedMinor < 0) {
     out.push({

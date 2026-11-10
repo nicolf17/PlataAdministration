@@ -30,17 +30,19 @@ export function TransactionForm({
   cards,
   categories,
   today,
+  initialType = "EXPENSE",
 }: {
   accounts: AccountOption[];
   cards: CardOption[];
   categories: CategoryOption[];
   today: string;
+  initialType?: TxType;
 }) {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
     createTransaction,
     null,
   );
-  const [type, setType] = useState<TxType>("EXPENSE");
+  const [type, setType] = useState<TxType>(initialType);
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
 

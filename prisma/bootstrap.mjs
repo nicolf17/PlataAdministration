@@ -32,6 +32,14 @@ if (accountCount === 0) {
   console.log("[bootstrap] 2 cuentas creadas");
 }
 
+const cardCount = db.prepare('SELECT count(*) AS c FROM "CreditCard"').get().c;
+if (cardCount === 0) {
+  db.prepare(
+    'INSERT INTO "CreditCard" (id, name, limitMinor, closingDay, dueDay) VALUES (?, ?, ?, ?, ?)',
+  ).run(id(), "Tarjeta de crédito", 5_000_000, 25, 10);
+  console.log("[bootstrap] 1 tarjeta creada");
+}
+
 const categoryCount = db.prepare('SELECT count(*) AS c FROM "Category"').get().c;
 if (categoryCount === 0) {
   const insert = db.prepare(

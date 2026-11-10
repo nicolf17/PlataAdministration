@@ -62,6 +62,7 @@ export default async function MovementsPage({
         cards={formData.cards}
         categories={formData.categories}
         today={toInputDate(new Date())}
+        initialType={activeFilter?.type ?? "EXPENSE"}
       />
 
       <div className="mt-4 grid grid-cols-3 gap-3">

@@ -18,7 +18,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
         <div className="mt-auto rounded-xl border border-line bg-surface/60 p-3">
           <p className="text-[11px] leading-relaxed text-muted">
-            Datos locales en SQLite. Nada sale de tu máquina.
+            Tus datos en un servidor privado propio, en SQLite.
           </p>
         </div>
       </aside>
