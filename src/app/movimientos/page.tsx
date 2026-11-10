@@ -12,7 +12,7 @@ import {
   toInputDate,
 } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
-import { getTransactionFormData, getTransactions } from "@/lib/queries";
+import { getTransactionById, getTransactionFormData, getTransactions } from "@/lib/queries";
 import type { TransactionType } from "@/generated/prisma/client";
 
 export const instant = false;
@@ -27,7 +27,7 @@ const FILTERS: Array<{ value: string; label: string; type?: TransactionType }> =
 export default async function MovementsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mes?: string; tipo?: string; categoria?: string }>;
+  searchParams: Promise<{ mes?: string; tipo?: string; categoria?: string; editar?: string }>;
 }) {
   const params = await searchParams;
   await connection();
@@ -39,6 +39,9 @@ export default async function MovementsPage({
     getTransactionFormData(),
     getTransactions({ month, type: activeFilter?.type, categoryId }),
   ]);
+  const editing = params.editar
+    ? await getTransactionById(params.editar)
+    : null;
 
   const activeCategory = formData.categories.find((c) => c.id === categoryId);
   const income = rows
@@ -58,11 +61,13 @@ export default async function MovementsPage({
       </PageHeader>
 
       <TransactionForm
+        key={editing?.id ?? "nuevo"}
         accounts={formData.accounts}
         cards={formData.cards}
         categories={formData.categories}
         today={toInputDate(new Date())}
         initialType={activeFilter?.type ?? "EXPENSE"}
+        editing={editing}
       />
 
       <div className="mt-4 grid grid-cols-3 gap-3">

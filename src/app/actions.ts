@@ -36,10 +36,21 @@ function refreshAll() {
   revalidatePath("/", "layout");
 }
 
-export async function createTransaction(
-  _prev: ActionState,
+type ValidatedTransaction = {
+  type: (typeof transactionTypes)[number];
+  amountMinor: number;
+  description: string;
+  date: Date;
+  categoryId: string | null;
+  accountId: string | null;
+  creditCardId: string | null;
+  transferAccountId: string | null;
+  notes: string | null;
+};
+
+async function validateTransaction(
   formData: FormData,
-): Promise<ActionState> {
+): Promise<{ ok: true; data: ValidatedTransaction } | { ok: false; message: string }> {
   const typeRaw = str(formData, "type");
   const type = z.enum(transactionTypes).safeParse(typeRaw);
 
@@ -101,23 +112,82 @@ export async function createTransaction(
     }
   }
 
-  await prisma.transaction.create({
+  return {
+    ok: true,
     data: {
       type: type.data,
       amountMinor,
       description,
       date,
-      notes: str(formData, "notes") || null,
       categoryId,
       accountId: payer.accountId ?? null,
       creditCardId: payer.cardId ?? destination.cardId ?? null,
-      transferAccountId:
-        type.data === "TRANSFER" ? (destination.accountId ?? null) : null,
+      transferAccountId: type.data === "TRANSFER" ? (destination.accountId ?? null) : null,
+      notes: str(formData, "notes") || null,
+    },
+  };
+}
+
+export async function createTransaction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const parsed = await validateTransaction(formData);
+  if (!parsed.ok) return { ok: false, message: parsed.message };
+
+  await prisma.transaction.create({
+    data: {
+      type: parsed.data.type,
+      amountMinor: parsed.data.amountMinor,
+      description: parsed.data.description,
+      date: parsed.data.date,
+      notes: parsed.data.notes,
+      categoryId: parsed.data.categoryId,
+      accountId: parsed.data.accountId,
+      creditCardId: parsed.data.creditCardId,
+      transferAccountId: parsed.data.transferAccountId,
     },
   });
 
   refreshAll();
   return { ok: true, message: "Movimiento registrado." };
+}
+
+export async function updateTransaction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const id = str(formData, "id");
+  if (!id) return { ok: false, message: "Movimiento inválido." };
+
+  const parsed = await validateTransaction(formData);
+  if (!parsed.ok) return { ok: false, message: parsed.message };
+
+  const existing = await prisma.transaction.findUnique({
+    where: { id },
+    select: { id: true },
+  });
+  if (!existing) {
+    return { ok: false, message: "Ese movimiento ya no existe." };
+  }
+
+  await prisma.transaction.update({
+    where: { id },
+    data: {
+      type: parsed.data.type,
+      amountMinor: parsed.data.amountMinor,
+      description: parsed.data.description,
+      date: parsed.data.date,
+      notes: parsed.data.notes,
+      categoryId: parsed.data.categoryId,
+      accountId: parsed.data.accountId,
+      creditCardId: parsed.data.creditCardId,
+      transferAccountId: parsed.data.transferAccountId,
+    },
+  });
+
+  refreshAll();
+  return { ok: true, message: "Movimiento actualizado." };
 }
 
 export async function deleteTransaction(formData: FormData): Promise<void> {

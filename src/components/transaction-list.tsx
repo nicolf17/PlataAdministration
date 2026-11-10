@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { deleteTransaction } from "@/app/actions";
-import { IconArrowDown, IconArrowUp, IconTrash } from "@/components/icons";
+import { IconArrowDown, IconArrowUp, IconPencil, IconTrash } from "@/components/icons";
 import { formatDayMonth, weekdayLabel } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import type { TransactionRow } from "@/lib/queries";
@@ -107,12 +107,20 @@ export function TransactionList({
                       <button
                         type="submit"
                         aria-label={`Eliminar ${row.description}`}
-                        className="grid size-7 place-items-center rounded-md text-muted/0 transition-colors group-hover:text-muted hover:!text-danger"
+                        className="grid size-9 min-w-9 place-items-center rounded-md text-muted transition-colors hover:bg-danger/10 hover:text-danger"
                       >
-                        <IconTrash className="size-3.5" />
+                        <IconTrash className="size-4" />
                       </button>
                     </form>
                   ) : null}
+
+                  <Link
+                    href={`/movimientos?editar=${row.id}#nuevo`}
+                    aria-label={`Editar ${row.description}`}
+                    className="grid size-9 min-w-9 place-items-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                  >
+                    <IconPencil className="size-4" />
+                  </Link>
                 </li>
               );
             })}

@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState } from "react";
 
-import { createTransaction, type ActionState } from "@/app/actions";
+import { createTransaction, updateTransaction, type ActionState } from "@/app/actions";
 import { AmountInput } from "@/components/amount-input";
 import { IconPlus } from "@/components/icons";
+import { formatAmountInput } from "@/lib/money";
 
 type AccountOption = { id: string; name: string };
 type CardOption = { id: string; name: string };
@@ -15,6 +16,18 @@ type CategoryOption = {
   name: string;
   type: "INCOME" | "EXPENSE";
   parentId: string | null;
+};
+
+type MovementEdit = {
+  id: string;
+  type: TxType;
+  amountMinor: number;
+  description: string;
+  date: string;
+  notes: string | null;
+  categoryId: string | null;
+  payer: string;
+  destination: string;
 };
 
 type TxType = "EXPENSE" | "INCOME" | "TRANSFER";
@@ -31,18 +44,26 @@ export function TransactionForm({
   categories,
   today,
   initialType = "EXPENSE",
+  editing = null,
 }: {
   accounts: AccountOption[];
   cards: CardOption[];
   categories: CategoryOption[];
   today: string;
   initialType?: TxType;
+  editing?: MovementEdit | null;
 }) {
+  const action = editing ? updateTransaction : createTransaction;
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
-    createTransaction,
+    action,
     null,
   );
-  const [type, setType] = useState<TxType>(initialType);
+  const initialTypeResolved: TxType =
+    initialType === "INCOME" || initialType === "EXPENSE" || initialType === "TRANSFER"
+      ? initialType
+      : "EXPENSE";
+  const initialTypeValue: TxType = editing ? editing.type : initialTypeResolved;
+  const [type, setType] = useState<TxType>(initialTypeValue);
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
 
@@ -51,8 +72,12 @@ export function TransactionForm({
       formRef.current?.reset();
       // Refresca la lista de movimientos de esta pantalla y el dashboard.
       router.refresh();
+      // Al editar, el formulario se re-renderiza como lista limpia.
+      if (editing) {
+        router.replace("/movimientos");
+      }
     }
-  }, [state, router]);
+  }, [state, router, editing]);
 
   function changeType(next: TxType) {
     setType(next);
@@ -69,10 +94,13 @@ export function TransactionForm({
       action={formAction}
       className="card scroll-mt-20 p-4 sm:p-5"
     >
+      <input type="hidden" name="id" value={editing?.id ?? ""} />
       <input type="hidden" name="type" value={type} />
 
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">Nuevo movimiento</h2>
+        <h2 className="text-sm font-semibold">
+          {editing ? "Editar movimiento" : "Nuevo movimiento"}
+        </h2>
         <span className="text-[10px] text-muted">Se guarda al instante</span>
       </div>
 
@@ -104,6 +132,7 @@ export function TransactionForm({
           <AmountInput
             id="amount"
             name="amount"
+            defaultValue={editing ? formatAmountInput(String(editing.amountMinor)) : undefined}
             placeholder="0"
             enterKeyHint="next"
             className="input pl-8 text-2xl font-semibold tabular-nums"
@@ -121,7 +150,7 @@ export function TransactionForm({
             id="date"
             name="date"
             type="date"
-            defaultValue={today}
+            defaultValue={editing?.date ?? today}
             className="input"
             required
           />
@@ -136,7 +165,7 @@ export function TransactionForm({
               id="categoryId"
               name="categoryId"
               className="input"
-              defaultValue=""
+              defaultValue={editing?.categoryId ?? ""}
             >
               <option value="">Sin categoría</option>
               {visibleCategories.map((category) => (
@@ -156,6 +185,7 @@ export function TransactionForm({
         <input
           id="description"
           name="description"
+          defaultValue={editing?.description ?? ""}
           placeholder="Ej: mercado del sábado"
           maxLength={80}
           enterKeyHint="done"
@@ -177,7 +207,7 @@ export function TransactionForm({
           name="payer"
           className="input"
           key={type}
-          defaultValue=""
+          defaultValue={editing?.payer ?? ""}
           required
         >
           <option value="">Elegir…</option>
@@ -210,7 +240,7 @@ export function TransactionForm({
             name="destination"
             className="input"
             key={type}
-            defaultValue=""
+            defaultValue={editing?.destination ?? ""}
             required
           >
             <option value="">Elegir…</option>
@@ -241,15 +271,21 @@ export function TransactionForm({
           disabled={pending}
         >
           <IconPlus className="size-4" />
-          {pending ? "Guardando…" : "Agregar movimiento"}
+          {pending
+            ? "Guardando…"
+            : editing
+              ? "Guardar cambios"
+              : "Agregar movimiento"}
         </button>
 
         <p className="mt-2 text-[11px] leading-relaxed text-muted">
-          {type === "EXPENSE"
-            ? "Con tarjeta queda como deuda; con efectivo o cuenta sale del saldo."
-            : type === "TRANSFER"
-              ? "Entre tus cuentas no es gasto. Hacia una tarjeta, es pago de deuda."
-              : "Suma al saldo de la cuenta elegida."}
+          {editing
+            ? "Guardá los cambios. El historial de saldos se recalcula sola."
+            : type === "EXPENSE"
+              ? "Con tarjeta queda como deuda; con efectivo o cuenta sale del saldo."
+              : type === "TRANSFER"
+                ? "Entre tus cuentas no es gasto. Hacia una tarjeta, es pago de deuda."
+                : "Suma al saldo de la cuenta elegida."}
         </p>
 
         {visibleCategories.length === 0 && type !== "TRANSFER" ? (
@@ -260,6 +296,12 @@ export function TransactionForm({
               Crear una
             </Link>
           </p>
+        ) : null}
+
+        {editing ? (
+          <Link href="/movimientos" className="btn mt-2 w-full sm:w-auto">
+            Cancelar
+          </Link>
         ) : null}
 
         {state ? (

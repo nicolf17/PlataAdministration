@@ -1,7 +1,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/db";
-import { monthRange, previousMonths } from "@/lib/dates";
+import { monthRange, previousMonths, toInputDate } from "@/lib/dates";
 import { buildRecommendations } from "@/lib/recommendations";
 import type {
   AccountType,
@@ -391,6 +391,58 @@ export async function getTransactions(filters: TransactionFilters) {
   });
 
   return txs.map(toRow);
+}
+
+export type TransactionFormValues = {
+  id: string;
+  type: TransactionType;
+  amountMinor: number;
+  description: string;
+  date: string;
+  notes: string | null;
+  categoryId: string | null;
+  payer: string;
+  destination: string;
+};
+
+export async function getTransactionById(id: string): Promise<TransactionFormValues | null> {
+  const tx = await prisma.transaction.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      type: true,
+      amountMinor: true,
+      description: true,
+      date: true,
+      notes: true,
+      categoryId: true,
+      accountId: true,
+      transferAccountId: true,
+      creditCardId: true,
+    },
+  });
+
+  if (!tx) return null;
+
+  return {
+    id: tx.id,
+    type: tx.type,
+    amountMinor: tx.amountMinor,
+    description: tx.description,
+    date: toInputDate(tx.date),
+    notes: tx.notes,
+    categoryId: tx.categoryId,
+    payer:
+      tx.accountId ? `account:${tx.accountId}` : tx.creditCardId ? `card:${tx.creditCardId}` : "",
+    destination:
+      tx.type === "TRANSFER"
+        ? tx.creditCardId
+          ? `card:${tx.creditCardId}`
+          : tx.transferAccountId
+            ? `account:${tx.transferAccountId}`
+            : ""
+        : "",
+  };
 }
 
 export async function getTransactionFormData() {
