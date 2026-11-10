@@ -23,7 +23,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line/70 bg-[#080d13]/90 px-3 py-2.5 backdrop-blur md:hidden">
+      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line/70 bg-[#080d13]/90 px-3 py-2.5 pt-[env(safe-area-inset-top)] backdrop-blur md:hidden">
         <Link href="/" className="flex items-center gap-2">
           <span className="grid size-7 place-items-center rounded-lg bg-accent text-xs font-black text-[#04231b]">
             P
