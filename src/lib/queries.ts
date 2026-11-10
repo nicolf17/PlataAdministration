@@ -1,6 +1,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/db";
+import { getSessionUser } from "@/lib/auth";
 import { monthRange, previousMonths, toInputDate } from "@/lib/dates";
 import { buildRecommendations } from "@/lib/recommendations";
 import type {
@@ -77,10 +78,20 @@ export function computeCardDebt(
 }
 
 export async function getFinancialState() {
+  const user = await getSessionUser();
+  const userId = user?.id;
+
   const [accounts, cards, transactions] = await Promise.all([
-    prisma.account.findMany({ orderBy: [{ archived: "asc" }, { createdAt: "asc" }] }),
-    prisma.creditCard.findMany({ orderBy: [{ archived: "asc" }, { createdAt: "asc" }] }),
+    prisma.account.findMany({
+      where: { archived: false, ...(userId ? { userId } : {}) },
+      orderBy: [{ archived: "asc" }, { createdAt: "asc" }],
+    }),
+    prisma.creditCard.findMany({
+      where: { archived: false, ...(userId ? { userId } : {}) },
+      orderBy: [{ archived: "asc" }, { createdAt: "asc" }],
+    }),
     prisma.transaction.findMany({
+      where: { ...(userId ? { userId } : {}) },
       select: {
         type: true,
         amountMinor: true,
@@ -212,8 +223,12 @@ async function getCategorySpending(month: string): Promise<{
   const { start } = monthRange(months[0]);
   const { end } = monthRange(month);
 
+  const user = await getSessionUser();
+  const userId = user?.id;
+
   const txs = await prisma.transaction.findMany({
     where: {
+      ...(userId ? { userId } : {}),
       type: "EXPENSE",
       date: { gte: start, lt: end },
     },
@@ -277,8 +292,11 @@ async function getCategorySpending(month: string): Promise<{
 }
 
 export async function getBudgets(month: string, spending: CategorySlice[]) {
+  const user = await getSessionUser();
+  const userId = user?.id;
+
   const budgets = await prisma.budget.findMany({
-    where: { month },
+    where: { month, ...(userId ? { userId } : {}) },
     include: { category: { select: { id: true, name: true, color: true } } },
     orderBy: { limitMinor: "desc" },
   });
@@ -307,22 +325,24 @@ export async function getBudgets(month: string, spending: CategorySlice[]) {
 export type DashboardData = Awaited<ReturnType<typeof getDashboard>>;
 
 export async function getDashboard(month: string) {
+  const user = await getSessionUser();
+  const userId = user?.id;
   const { start, end } = monthRange(month);
 
   const [state, incomeAgg, categoryData, recent, txCount] = await Promise.all([
     getFinancialState(),
     prisma.transaction.aggregate({
-      where: { type: "INCOME", date: { gte: start, lt: end } },
+      where: { type: "INCOME", ...(userId ? { userId } : {}), date: { gte: start, lt: end } },
       _sum: { amountMinor: true },
     }),
     getCategorySpending(month),
     prisma.transaction.findMany({
-      where: { date: { gte: start, lt: end } },
+      where: { ...(userId ? { userId } : {}), date: { gte: start, lt: end } },
       include: txInclude,
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
       take: 8,
     }),
-    prisma.transaction.count({ where: { date: { gte: start, lt: end } } }),
+    prisma.transaction.count({ where: { ...(userId ? { userId } : {}), date: { gte: start, lt: end } } }),
   ]);
 
   const incomeMinor = incomeAgg._sum.amountMinor ?? 0;
@@ -371,10 +391,13 @@ export type TransactionFilters = {
 };
 
 export async function getTransactions(filters: TransactionFilters) {
+  const user = await getSessionUser();
+  const userId = user?.id;
   const { start, end } = monthRange(filters.month);
 
   const txs = await prisma.transaction.findMany({
     where: {
+      ...(userId ? { userId } : {}),
       date: { gte: start, lt: end },
       ...(filters.type ? { type: filters.type } : {}),
       ...(filters.categoryId
@@ -406,8 +429,14 @@ export type TransactionFormValues = {
 };
 
 export async function getTransactionById(id: string): Promise<TransactionFormValues | null> {
-  const tx = await prisma.transaction.findUnique({
-    where: { id },
+  const user = await getSessionUser();
+  const userId = user?.id;
+
+  const tx = await prisma.transaction.findFirst({
+    where: {
+      id,
+      ...(userId ? { userId } : {}),
+    },
     select: {
       id: true,
       type: true,
@@ -446,18 +475,22 @@ export async function getTransactionById(id: string): Promise<TransactionFormVal
 }
 
 export async function getTransactionFormData() {
+  const user = await getSessionUser();
+  const userId = user?.id;
+
   const [accounts, cards, categories] = await Promise.all([
     prisma.account.findMany({
-      where: { archived: false },
+      where: { archived: false, ...(userId ? { userId } : {}) },
       orderBy: { createdAt: "asc" },
       select: { id: true, name: true, type: true },
     }),
     prisma.creditCard.findMany({
-      where: { archived: false },
+      where: { archived: false, ...(userId ? { userId } : {}) },
       orderBy: { createdAt: "asc" },
       select: { id: true, name: true },
     }),
     prisma.category.findMany({
+      where: userId ? { userId } : undefined,
       orderBy: [{ type: "asc" }, { name: "asc" }],
       select: { id: true, name: true, type: true, parentId: true, color: true },
     }),
@@ -467,20 +500,26 @@ export async function getTransactionFormData() {
 }
 
 export async function getAccountsPageData() {
+  const user = await getSessionUser();
+  const userId = user?.id;
+
   const [state, accounts, cards] = await Promise.all([
     getFinancialState(),
-    prisma.account.findMany({ orderBy: { createdAt: "asc" } }),
-    prisma.creditCard.findMany({ orderBy: { createdAt: "asc" } }),
+    prisma.account.findMany({ where: { ...(userId ? { userId } : {}) }, orderBy: { createdAt: "asc" } }),
+    prisma.creditCard.findMany({ where: { ...(userId ? { userId } : {}) }, orderBy: { createdAt: "asc" } }),
   ]);
 
   return { state, accounts, cards };
 }
 
 export async function getBudgetPageData(month: string) {
+  const user = await getSessionUser();
+  const userId = user?.id;
+
   const [categoryData, categories] = await Promise.all([
     getCategorySpending(month),
     prisma.category.findMany({
-      where: { type: "EXPENSE" },
+      where: { type: "EXPENSE", ...(userId ? { userId } : {}) },
       orderBy: [{ parentId: "asc" }, { name: "asc" }],
       select: { id: true, name: true, parentId: true, color: true },
     }),
@@ -497,7 +536,11 @@ export async function getBudgetPageData(month: string) {
 }
 
 export async function getCategoriesPageData() {
+  const user = await getSessionUser();
+  const userId = user?.id;
+
   const categories = await prisma.category.findMany({
+    where: userId ? { userId } : undefined,
     orderBy: [{ type: "asc" }, { name: "asc" }],
     include: {
       _count: { select: { transactions: true } },

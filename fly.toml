@@ -12,6 +12,7 @@ kill_timeout = "30s"
   PORT = "3000"
   HOSTNAME = "0.0.0.0"
   DATABASE_URL = "file:/data/plata.db"
+  SESSION_SECRET = "plata-dev-secret-change-me"
 
 [http_service]
   internal_port = 3000

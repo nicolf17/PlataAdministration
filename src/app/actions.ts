@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { parseInputDate } from "@/lib/dates";
+import { hashPassword, verifyPassword, createSession, getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { parseAmountToMinor } from "@/lib/money";
 
@@ -46,11 +48,15 @@ type ValidatedTransaction = {
   creditCardId: string | null;
   transferAccountId: string | null;
   notes: string | null;
+  userId: string | null;
 };
 
 async function validateTransaction(
   formData: FormData,
 ): Promise<{ ok: true; data: ValidatedTransaction } | { ok: false; message: string }> {
+  const user = await getSessionUser();
+  const userId = user?.id;
+
   const typeRaw = str(formData, "type");
   const type = z.enum(transactionTypes).safeParse(typeRaw);
 
@@ -79,8 +85,8 @@ async function validateTransaction(
   const destination = parsePayer(str(formData, "destination"));
 
   if (categoryId) {
-    const category = await prisma.category.findUnique({
-      where: { id: categoryId },
+    const category = await prisma.category.findFirst({
+      where: { id: categoryId, ...(userId ? { userId } : {}) },
       select: { type: true },
     });
     const expected = type.data === "INCOME" ? "INCOME" : "EXPENSE";
@@ -124,6 +130,7 @@ async function validateTransaction(
       creditCardId: payer.cardId ?? destination.cardId ?? null,
       transferAccountId: type.data === "TRANSFER" ? (destination.accountId ?? null) : null,
       notes: str(formData, "notes") || null,
+      userId: userId ?? null,
     },
   };
 }
@@ -146,6 +153,7 @@ export async function createTransaction(
       accountId: parsed.data.accountId,
       creditCardId: parsed.data.creditCardId,
       transferAccountId: parsed.data.transferAccountId,
+      userId: parsed.data.userId,
     },
   });
 
@@ -163,8 +171,11 @@ export async function updateTransaction(
   const parsed = await validateTransaction(formData);
   if (!parsed.ok) return { ok: false, message: parsed.message };
 
-  const existing = await prisma.transaction.findUnique({
-    where: { id },
+  const user = await getSessionUser();
+  const userId = user?.id;
+
+  const existing = await prisma.transaction.findFirst({
+    where: { id, ...(userId ? { userId } : {}) },
     select: { id: true },
   });
   if (!existing) {
@@ -183,6 +194,7 @@ export async function updateTransaction(
       accountId: parsed.data.accountId,
       creditCardId: parsed.data.creditCardId,
       transferAccountId: parsed.data.transferAccountId,
+      userId: parsed.data.userId,
     },
   });
 
@@ -194,8 +206,47 @@ export async function deleteTransaction(formData: FormData): Promise<void> {
   const id = str(formData, "id");
   if (!id) return;
 
-  await prisma.transaction.delete({ where: { id } });
+  const user = await getSessionUser();
+  const userId = user?.id;
+
+  await prisma.transaction.deleteMany({
+    where: { id, ...(userId ? { userId } : {}) },
+  });
   refreshAll();
+}
+
+export async function logout(_prev: ActionState): Promise<ActionState> {
+  const { cookies } = await import("next/headers");
+  const cookieStore = await cookies();
+  cookieStore.delete("plata_session");
+  return { ok: true, message: "Sesión cerrada." };
+}
+
+export async function signup(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const name = str(formData, "name");
+  const email = str(formData, "email").trim().toLowerCase();
+  const password = str(formData, "password");
+  if (name.trim().length < 2) return { ok: false, message: "Poné tu nombre." };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, message: "Poné un email válido." };
+  if (password.length < 6) return { ok: false, message: "La contraseña debe tener al menos 6 caracteres." };
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) return { ok: false, message: "Ya existe una cuenta con ese email." };
+  const user = await prisma.user.create({ data: { name: name.trim(), email, passwordHash: hashPassword(password) } });
+  await createSession(user.id);
+  redirect("/");
+  return { ok: true, message: "Cuenta creada." };
+}
+
+export async function login(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const email = str(formData, "email").trim().toLowerCase();
+  const password = str(formData, "password");
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) return { ok: false, message: "Email o contraseña inválidos." };
+  const ok = verifyPassword(password, user.passwordHash);
+  if (!ok) return { ok: false, message: "Email o contraseña inválidos." };
+  await createSession(user.id);
+  redirect("/");
+  return { ok: true, message: "Sesión iniciada." };
 }
 
 const accountTypes = ["CASH", "SAVINGS"] as const;
@@ -217,8 +268,15 @@ export async function createAccount(
   const initialRaw = str(formData, "initial");
   const initialMinor = initialRaw ? (parseAmountToMinor(initialRaw) ?? 0) : 0;
 
+  const user = await getSessionUser();
+
   await prisma.account.create({
-    data: { name, type: type.data, initialBalanceMinor: initialMinor },
+    data: {
+      name,
+      type: type.data,
+      initialBalanceMinor: initialMinor,
+      ...(user?.id ? { userId: user.id } : {}),
+    },
   });
 
   refreshAll();
@@ -232,8 +290,14 @@ export async function deleteAccount(
   const id = str(formData, "id");
   if (!id) return { ok: false, message: "Cuenta inválida." };
 
+  const user = await getSessionUser();
+  const userId = user?.id;
+
   const used = await prisma.transaction.count({
-    where: { OR: [{ accountId: id }, { transferAccountId: id }] },
+    where: {
+      OR: [{ accountId: id }, { transferAccountId: id }],
+      ...(userId ? { userId } : {}),
+    },
   });
 
   if (used > 0) {
@@ -276,20 +340,30 @@ export async function createCategory(
     return { ok: false, message: "Tipo de categoría inválido." };
   }
 
+  const user = await getSessionUser();
+
   const existing = await prisma.category.findFirst({
-    where: { name, type: type.data, parentId: null },
+    where: {
+      name,
+      type: type.data,
+      parentId: null,
+      ...(user?.id ? { userId: user.id } : {}),
+    },
     select: { id: true },
   });
   if (existing) {
     return { ok: false, message: "Ya existe una categoría con ese nombre." };
   }
 
-  const count = await prisma.category.count({ where: { type: type.data } });
+  const count = await prisma.category.count({
+    where: { type: type.data, ...(user?.id ? { userId: user.id } : {}) },
+  });
   await prisma.category.create({
     data: {
       name,
       type: type.data,
       color: CATEGORY_COLORS[count % CATEGORY_COLORS.length],
+      ...(user?.id ? { userId: user.id } : {}),
     },
   });
 
@@ -304,7 +378,11 @@ export async function deleteCategory(
   const id = str(formData, "id");
   if (!id) return { ok: false, message: "Categoría inválida." };
 
-  const used = await prisma.transaction.count({ where: { categoryId: id } });
+  const user = await getSessionUser();
+
+  const used = await prisma.transaction.count({
+    where: { categoryId: id, ...(user?.id ? { userId: user.id } : {}) },
+  });
   await prisma.category.delete({ where: { id } });
   refreshAll();
 
@@ -345,8 +423,16 @@ export async function createCreditCard(
     return { ok: false, message: "Los días de corte y pago van del 1 al 31." };
   }
 
+  const user = await getSessionUser();
+
   await prisma.creditCard.create({
-    data: { name, limitMinor, closingDay, dueDay },
+    data: {
+      name,
+      limitMinor,
+      closingDay,
+      dueDay,
+      ...(user?.id ? { userId: user.id } : {}),
+    },
   });
 
   refreshAll();
@@ -360,8 +446,10 @@ export async function deleteCreditCard(
   const id = str(formData, "id");
   if (!id) return { ok: false, message: "Tarjeta inválida." };
 
+  const user = await getSessionUser();
+
   const used = await prisma.transaction.count({
-    where: { creditCardId: id },
+    where: { creditCardId: id, ...(user?.id ? { userId: user.id } : {}) },
   });
 
   if (used > 0) {
@@ -384,6 +472,7 @@ export async function upsertBudget(
   const categoryId = str(formData, "categoryId");
   const month = str(formData, "month");
   const limitMinor = parseAmountToMinor(str(formData, "limit"));
+  const user = await getSessionUser();
 
   if (!categoryId) {
     return { ok: false, message: "Elegí una categoría." };
@@ -396,7 +485,9 @@ export async function upsertBudget(
   }
 
   if (id) {
-    const existing = await prisma.budget.findUnique({ where: { id } });
+    const existing = await prisma.budget.findFirst({
+      where: { id, ...(user ? { userId: user.id } : {}) },
+    });
     if (!existing) {
       return { ok: false, message: "Ese presupuesto ya no existe." };
     }
@@ -412,7 +503,7 @@ export async function upsertBudget(
 
   await prisma.budget.upsert({
     where: { categoryId_month: { categoryId, month } },
-    create: { categoryId, month, limitMinor },
+    create: { categoryId, month, limitMinor, ...(user?.id ? { userId: user.id } : {}) },
     update: { limitMinor },
   });
 

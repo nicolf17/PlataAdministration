@@ -1,9 +1,13 @@
 import Link from "next/link";
 
+import { getSessionUser } from "@/lib/auth";
 import { NavLinks } from "@/components/nav-links";
 import { NewMovementButton } from "@/components/new-movement-button";
+import { UserMenu } from "@/components/user-menu";
 
-export function Shell({ children }: { children: React.ReactNode }) {
+export async function Shell({ children }: { children: React.ReactNode }) {
+  const user = await getSessionUser();
+
   return (
     <div className="min-h-dvh md:flex">
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line/80 px-4 py-6 md:flex">
@@ -17,6 +21,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <NavLinks />
 
         <div className="mt-auto rounded-xl border border-line bg-surface/60 p-3">
+          {user ? (
+            <div className="mb-3">
+              <p className="truncate text-[12px] font-semibold">{user.name}</p>
+              <p className="truncate text-[11px] text-muted">{user.email}</p>
+            </div>
+          ) : null}
           <p className="text-[11px] leading-relaxed text-muted">
             Tus datos en un servidor privado propio, en SQLite.
           </p>
@@ -33,7 +43,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </span>
         </Link>
 
-        <NewMovementButton />
+        <div className="flex items-center gap-2">
+          <NewMovementButton />
+
+          <UserMenu name={user?.name ?? "?"} />
+        </div>
       </header>
 
       <main className="flex-1 pb-28 md:pb-12">

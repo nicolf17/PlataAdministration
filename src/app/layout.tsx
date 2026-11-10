@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Suspense } from "react";
 
 import { PwaRegister } from "@/components/pwa-register";
 import { Shell } from "@/components/shell";
@@ -60,7 +61,9 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        <Shell>{children}</Shell>
+        <Suspense fallback={null}>
+          <Shell>{children}</Shell>
+        </Suspense>
         <PwaRegister />
       </body>
     </html>
