@@ -118,7 +118,7 @@ export function TransactionList({
                         <button
                           type="submit"
                           aria-label={`Eliminar ${row.description}`}
-                          className="grid size-8 min-w-8 place-items-center rounded-md text-danger/80 transition-colors hover:bg-danger/10 hover:text-danger"
+                          className="grid size-8 min-w-8 place-items-center rounded-md border border-danger/30 bg-danger/10 text-danger transition-colors hover:bg-danger/20"
                         >
                           <IconTrash className="size-4" />
                         </button>
@@ -128,7 +128,7 @@ export function TransactionList({
                     <Link
                       href={`/movimientos?editar=${row.id}#nuevo`}
                       aria-label={`Editar ${row.description}`}
-                      className="grid size-8 min-w-8 place-items-center rounded-md text-info/80 transition-colors hover:bg-info/10 hover:text-info"
+                      className="grid size-8 min-w-8 place-items-center rounded-md border border-info/30 bg-info/10 text-info transition-colors hover:bg-info/20"
                     >
                       <IconPencil className="size-4" />
                     </Link>

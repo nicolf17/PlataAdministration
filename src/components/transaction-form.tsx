@@ -194,7 +194,9 @@ export function TransactionForm({
         </div>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-3">
+      {/* En el celular van uno debajo del otro: el input de fecha nativo de
+          iOS no baja de su ancho intrínseco y en dos columnas se desbordaba. */}
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="min-w-0">
           <label className="label" htmlFor="date">
             Fecha

@@ -12,8 +12,11 @@ export async function Shell({ children }: { children: React.ReactNode }) {
   // mostrar navegación ni un botón para cerrar una sesión que no existe.
   if (!user) {
     return (
-      <main className="mx-auto w-full max-w-6xl px-3 pt-3 sm:px-4 sm:pt-5 md:px-8 md:pt-10">
-        {children}
+      <main className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-3 pt-3 sm:px-4 sm:pt-5 md:px-8 md:pt-10">
+        <div className="flex-1">{children}</div>
+        <p className="pb-4 pt-8 text-[11px] tracking-wide text-muted/70">
+          by Nicolás López Forero
+        </p>
       </main>
     );
   }
@@ -61,6 +64,9 @@ export async function Shell({ children }: { children: React.ReactNode }) {
       <main className="flex-1 pb-28 md:pb-12">
         <div className="mx-auto w-full max-w-6xl px-3 pt-3 sm:px-4 sm:pt-5 md:px-8 md:pt-10">
           {children}
+          <p className="pb-1 pt-10 text-[11px] tracking-wide text-muted/70">
+            by Nicolás López Forero
+          </p>
         </div>
       </main>
 
