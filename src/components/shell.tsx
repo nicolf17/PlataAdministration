@@ -42,6 +42,10 @@ export async function Shell({ children }: { children: React.ReactNode }) {
             Tus datos en un servidor privado propio, en SQLite.
           </p>
         </div>
+
+        <p className="mt-3 px-1 text-[11px] tracking-wide text-muted/70">
+          by Nicolás López Forero
+        </p>
       </aside>
 
       {/* Mismo color que el fondo de la app y la barra de estado: sin
@@ -64,7 +68,7 @@ export async function Shell({ children }: { children: React.ReactNode }) {
       <main className="flex-1 pb-28 md:pb-12">
         <div className="mx-auto w-full max-w-6xl px-3 pt-3 sm:px-4 sm:pt-5 md:px-8 md:pt-10">
           {children}
-          <p className="pb-1 pt-10 text-[11px] tracking-wide text-muted/70">
+          <p className="pb-1 pt-10 text-[11px] tracking-wide text-muted/70 md:hidden">
             by Nicolás López Forero
           </p>
         </div>

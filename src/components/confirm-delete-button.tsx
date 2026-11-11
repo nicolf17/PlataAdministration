@@ -39,7 +39,7 @@ export function ConfirmDeleteButton({
           type="submit"
           disabled={pending}
           aria-label={`Eliminar ${label}`}
-          className="grid size-9 place-items-center rounded-lg text-muted transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
+          className="grid size-9 place-items-center rounded-lg border border-danger/30 bg-danger/10 text-danger transition-colors hover:bg-danger/20 disabled:opacity-50"
         >
           <IconTrash className="size-4" />
         </button>

@@ -237,7 +237,7 @@ export default async function DashboardPage({
               </h2>
               <Link
                 href={`/presupuestos?mes=${month}`}
-                className="text-[11px] font-medium text-muted hover:text-foreground"
+                className="text-[11px] font-semibold text-info hover:text-info/80"
               >
                 Editar
               </Link>

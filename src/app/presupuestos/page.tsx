@@ -145,7 +145,7 @@ export default async function BudgetsPage({
                       </span>
                       <Link
                         href={`/presupuestos?mes=${month}&editar=${budget.id}#presupuesto-form`}
-                        className="font-medium text-muted underline-offset-2 hover:text-foreground hover:underline"
+                        className="font-semibold text-info underline-offset-2 hover:text-info/80 hover:underline"
                       >
                         Editar
                       </Link>
