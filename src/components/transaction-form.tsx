@@ -71,15 +71,25 @@ export function TransactionForm({
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
 
+  // Evita reprocesar el mismo resultado del server action en cada re-render.
+  const handledState = useRef<ActionState | null>(null);
+
   useEffect(() => {
-    if (state?.ok) {
-      formRef.current?.reset();
-      // Refresca la lista de movimientos de esta pantalla y el dashboard.
-      router.refresh();
-      // Al editar, el formulario se re-renderiza como lista limpia.
-      if (editing) {
-        router.replace("/movimientos");
-        onSaved?.({
+    if (!state?.ok) return;
+    if (handledState.current === state) return;
+    handledState.current = state;
+
+    // Leemos el formulario ANTES de resetearlo: si no, perdemos los valores.
+    const fd = formRef.current ? new FormData(formRef.current) : null;
+    formRef.current?.reset();
+    // Refresca la lista de movimientos de esta pantalla y el dashboard.
+    router.refresh();
+
+    // Al editar, el formulario se re-renderiza como lista limpia.
+    if (editing) {
+      router.replace("/movimientos");
+      onSaved?.(
+        {
           id: editing.id,
           date: new Date(editing.date),
           type: editing.type,
@@ -91,33 +101,35 @@ export function TransactionForm({
           cardName: null,
           categoryName: null,
           categoryColor: null,
-        }, "update");
-      } else {
-        const fd = new FormData(formRef.current ?? undefined);
-        const type = String(fd.get("type") ?? "EXPENSE") as TxType;
-        const amountMinor = parseAmountToMinor(String(fd.get("amount") ?? ""));
-        const description = String(fd.get("description") ?? "");
-        const dateStr = String(fd.get("date") ?? today);
-        const categoryId = (String(fd.get("categoryId") ?? "") || null) as string | null;
-        const payer = String(fd.get("payer") ?? "");
-        const notes = (String(fd.get("notes") ?? "") || null) as string | null;
-        const category = categories.find((c) => c.id === categoryId) ?? null;
-        const row: TransactionRow = {
-          id: `optimistic-${Date.now()}`,
-          date: new Date(`${dateStr}T00:00:00Z`),
-          type,
-          amountMinor: amountMinor ?? 0,
-          description,
-          notes,
-          accountName: payer ? (payer.startsWith("account:") ? payer.slice(8) : null) : null,
-          transferAccountName: null,
-          cardName: payer?.startsWith("card:") ? payer.slice(5) : null,
-          categoryName: category?.name ?? null,
-          categoryColor: category?.color ?? null,
-        };
-        onSaved?.(row, "create");
-      }
+        },
+        "update",
+      );
+      return;
     }
+
+    if (!fd) return;
+    const nextType = String(fd.get("type") ?? "EXPENSE") as TxType;
+    const amountMinor = parseAmountToMinor(String(fd.get("amount") ?? ""));
+    const description = String(fd.get("description") ?? "");
+    const dateStr = String(fd.get("date") ?? today);
+    const categoryId = (String(fd.get("categoryId") ?? "") || null) as string | null;
+    const payer = String(fd.get("payer") ?? "");
+    const notes = (String(fd.get("notes") ?? "") || null) as string | null;
+    const category = categories.find((c) => c.id === categoryId) ?? null;
+    const row: TransactionRow = {
+      id: `optimistic-${Date.now()}`,
+      date: new Date(`${dateStr}T00:00:00Z`),
+      type: nextType,
+      amountMinor: amountMinor ?? 0,
+      description,
+      notes,
+      accountName: payer.startsWith("account:") ? payer.slice(8) : null,
+      transferAccountName: null,
+      cardName: payer.startsWith("card:") ? payer.slice(5) : null,
+      categoryName: category?.name ?? null,
+      categoryColor: category?.color ?? null,
+    };
+    onSaved?.(row, "create");
   }, [state, router, editing, categories, today, onSaved]);
 
   function changeType(next: TxType) {

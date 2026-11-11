@@ -66,6 +66,13 @@ export function MovimientosView({
 }: MovimientosViewProps) {
   const [transactions, setTransactions] = useState<TransactionRow[]>(rows);
 
+  // Cuando el server manda filas nuevas (refresh o cambio de mes), resincronizamos.
+  const [serverRows, setServerRows] = useState(rows);
+  if (serverRows !== rows) {
+    setServerRows(rows);
+    setTransactions(rows);
+  }
+
   const FILTERS: Array<{ value: string; label: string; type?: TransactionType }> = [
     { value: "", label: "Todos" },
     { value: "EXPENSE", label: "Gastos", type: "EXPENSE" },
@@ -74,6 +81,7 @@ export function MovimientosView({
   ];
 
   const handleDelete = async (id: string) => {
+    const removed = transactions.find((row) => row.id === id) ?? null;
     // Optimista: quito la fila antes de confirmar con el server.
     setTransactions((prev) => prev.filter((row) => row.id !== id));
     try {
@@ -82,7 +90,11 @@ export function MovimientosView({
       await deleteTransaction(fd);
     } catch {
       // Si el server falla, restauramos la fila.
-      setTransactions((prev) => [...prev, ...rows.filter((r) => r.id === id)]);
+      if (removed) {
+        setTransactions((prev) =>
+          prev.some((row) => row.id === removed.id) ? prev : [...prev, removed],
+        );
+      }
     }
   };
 
