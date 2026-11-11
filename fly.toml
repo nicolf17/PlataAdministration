@@ -12,7 +12,8 @@ kill_timeout = "30s"
   PORT = "3000"
   HOSTNAME = "0.0.0.0"
   DATABASE_URL = "file:/data/plata.db"
-  SESSION_SECRET = "plata-dev-secret-change-me"
+  # SESSION_SECRET NO va acá: es un secreto de Fly (`fly secrets set`).
+  # Estuvo commiteado y el repo es público: cualquiera podía forjar sesiones.
 
 [http_service]
   internal_port = 3000

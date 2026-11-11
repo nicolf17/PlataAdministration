@@ -10,7 +10,19 @@ export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 días desde el últi
 // Cuando al token le queda menos que esto, se re-emite con vencimiento nuevo.
 const RENEW_BEFORE_SECONDS = 60 * 60 * 24 * 5; // 5 días
 
-const SESSION_SECRET = process.env.SESSION_SECRET ?? "plata-dev-secret-change-me";
+// El secreto vive SOLO en los secretos de Fly (`fly secrets set SESSION_SECRET=...`).
+// Nunca en el repo: sin él cualquiera puede firmar una sesión para cualquier
+// usuario. Si falta en producción fallamos cerrado, no con un valor por defecto.
+const DEV_FALLBACK = "plata-dev-local-only";
+
+function sessionSecret(): string {
+  const secret = process.env.SESSION_SECRET;
+  if (secret) return secret;
+  if (process.env.NODE_ENV !== "production") return DEV_FALLBACK;
+  throw new Error(
+    "Falta SESSION_SECRET. Configuralo con: fly secrets set SESSION_SECRET=... --app plata-finanzas",
+  );
+}
 
 function toBase64Url(input: string): string {
   const bytes = new TextEncoder().encode(input);
@@ -30,7 +42,7 @@ function fromBase64Url(input: string): string {
 async function hmac(payload: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     "raw",
-    new TextEncoder().encode(SESSION_SECRET),
+    new TextEncoder().encode(sessionSecret()),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
