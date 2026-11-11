@@ -41,9 +41,12 @@ export default function LoginPage() {
         </button>
 
         {state?.ok ? (
-          <p role="status" className="text-[12px] font-medium text-accent">
-            Sesión iniciada. ¡Bienvenido!
-          </p>
+          <div
+            role="status"
+            className="animate-rise fixed inset-x-0 bottom-4 z-50 mx-auto w-[calc(100%-2rem)] max-w-sm rounded-xl border border-line bg-surface p-4 text-center text-[13px] font-medium text-accent shadow-lg"
+          >
+            {state.message}
+          </div>
         ) : null}
 
         {state && !state.ok ? (

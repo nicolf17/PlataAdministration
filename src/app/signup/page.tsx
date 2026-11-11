@@ -1,13 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useEffect } from "react";
 
 import { signup } from "@/app/actions";
 import type { ActionState } from "@/app/actions";
 
 export default function SignupPage() {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(signup, null);
+  const router = useRouter();
+
+  // Al registrarse con éxito: mostramos la alerta (del state) y navegamos al panel.
+  useEffect(() => {
+    if (state?.ok) {
+      const t = setTimeout(() => router.push("/"), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [state, router]);
 
   return (
     <div className="mx-auto w-full max-w-md pt-10">
@@ -32,8 +42,17 @@ export default function SignupPage() {
           {pending ? "Creando…" : "Crear cuenta"}
         </button>
 
-        {state ? (
-          <p role="status" className={`text-[12px] font-medium ${state.ok ? "text-accent" : "text-danger"}`}>
+        {state?.ok ? (
+          <div
+            role="status"
+            className="animate-rise fixed inset-x-0 bottom-4 z-50 mx-auto w-[calc(100%-2rem)] max-w-sm rounded-xl border border-line bg-surface p-4 text-center text-[13px] font-medium text-accent shadow-lg"
+          >
+            {state.message}
+          </div>
+        ) : null}
+
+        {state && !state.ok ? (
+          <p role="status" className="text-[12px] font-medium text-danger">
             {state.message}
           </p>
         ) : null}

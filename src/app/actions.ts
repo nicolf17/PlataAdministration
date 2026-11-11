@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+
 import { z } from "zod";
 
 import { parseInputDate } from "@/lib/dates";
@@ -233,7 +233,7 @@ export async function signup(_prev: ActionState, formData: FormData): Promise<Ac
   if (existing) return { ok: false, message: "Ya existe una cuenta con ese email." };
   const user = await prisma.user.create({ data: { name: name.trim(), email, passwordHash: hashPassword(password) } });
   await createSession(user.id);
-  redirect("/");
+  // No redirigimos acá: la page muestra la alerta de éxito y navega cuando el state llega.
   return { ok: true, message: "Cuenta creada." };
 }
 

@@ -7,7 +7,8 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { createTransaction, updateTransaction, type ActionState } from "@/app/actions";
 import { AmountInput } from "@/components/amount-input";
 import { IconPlus } from "@/components/icons";
-import { formatAmountInput } from "@/lib/money";
+import { formatAmountInput, parseAmountToMinor } from "@/lib/money";
+import type { TransactionRow } from "@/lib/queries";
 
 type AccountOption = { id: string; name: string };
 type CardOption = { id: string; name: string };
@@ -16,6 +17,7 @@ type CategoryOption = {
   name: string;
   type: "INCOME" | "EXPENSE";
   parentId: string | null;
+  color?: string | null;
 };
 
 type MovementEdit = {
@@ -45,6 +47,7 @@ export function TransactionForm({
   today,
   initialType = "EXPENSE",
   editing = null,
+  onSaved,
 }: {
   accounts: AccountOption[];
   cards: CardOption[];
@@ -52,6 +55,7 @@ export function TransactionForm({
   today: string;
   initialType?: TxType;
   editing?: MovementEdit | null;
+  onSaved?: (row: TransactionRow, mode: "create" | "update") => void;
 }) {
   const action = editing ? updateTransaction : createTransaction;
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
@@ -75,9 +79,46 @@ export function TransactionForm({
       // Al editar, el formulario se re-renderiza como lista limpia.
       if (editing) {
         router.replace("/movimientos");
+        onSaved?.({
+          id: editing.id,
+          date: new Date(editing.date),
+          type: editing.type,
+          amountMinor: editing.amountMinor,
+          description: editing.description,
+          notes: editing.notes,
+          accountName: null,
+          transferAccountName: null,
+          cardName: null,
+          categoryName: null,
+          categoryColor: null,
+        }, "update");
+      } else {
+        const fd = new FormData(formRef.current ?? undefined);
+        const type = String(fd.get("type") ?? "EXPENSE") as TxType;
+        const amountMinor = parseAmountToMinor(String(fd.get("amount") ?? ""));
+        const description = String(fd.get("description") ?? "");
+        const dateStr = String(fd.get("date") ?? today);
+        const categoryId = (String(fd.get("categoryId") ?? "") || null) as string | null;
+        const payer = String(fd.get("payer") ?? "");
+        const notes = (String(fd.get("notes") ?? "") || null) as string | null;
+        const category = categories.find((c) => c.id === categoryId) ?? null;
+        const row: TransactionRow = {
+          id: `optimistic-${Date.now()}`,
+          date: new Date(`${dateStr}T00:00:00Z`),
+          type,
+          amountMinor: amountMinor ?? 0,
+          description,
+          notes,
+          accountName: payer ? (payer.startsWith("account:") ? payer.slice(8) : null) : null,
+          transferAccountName: null,
+          cardName: payer?.startsWith("card:") ? payer.slice(5) : null,
+          categoryName: category?.name ?? null,
+          categoryColor: category?.color ?? null,
+        };
+        onSaved?.(row, "create");
       }
     }
-  }, [state, router, editing]);
+  }, [state, router, editing, categories, today, onSaved]);
 
   function changeType(next: TxType) {
     setType(next);
