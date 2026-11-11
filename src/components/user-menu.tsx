@@ -6,10 +6,7 @@ import { logout } from "@/app/actions";
 import type { ActionState } from "@/app/actions";
 
 export function UserMenu({ name }: { name: string }) {
-  const [state, formAction, pending] = useActionState<ActionState, FormData>(
-    logout,
-    null,
-  );
+  const [, formAction, pending] = useActionState<ActionState, FormData>(logout, null);
 
   return (
     <div className="flex items-center gap-2">
@@ -22,6 +19,7 @@ export function UserMenu({ name }: { name: string }) {
           disabled={pending}
           className="grid size-9 min-w-9 place-items-center rounded-md border border-line text-muted transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-60"
           aria-label="Cerrar sesión"
+          title="Cerrar sesión"
         >
           <svg
             className="size-4"
@@ -38,14 +36,6 @@ export function UserMenu({ name }: { name: string }) {
           </svg>
         </button>
       </form>
-      {state ? (
-        <p
-          role="status"
-          className={`text-[12px] font-medium ${state.ok ? "text-accent" : "text-danger"}`}
-        >
-          {state.message}
-        </p>
-      ) : null}
     </div>
   );
 }

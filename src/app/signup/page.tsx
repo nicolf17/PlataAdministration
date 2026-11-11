@@ -1,14 +1,14 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState } from "react";
 
 import { resendSignupCode, signup, verifySignup } from "@/app/actions";
 import type { ActionState } from "@/app/actions";
+import { Toast, type ToastTone } from "@/components/toast";
 
-const TOAST =
-  "animate-rise fixed inset-x-0 bottom-4 z-50 mx-auto w-[calc(100%-2rem)] max-w-sm rounded-xl border border-line bg-surface p-4 text-center text-[13px] font-medium text-accent shadow-lg";
+type Step = "signup" | "verify" | "resend";
 
 export default function SignupPage() {
   const [signupState, signupAction, signupPending] = useActionState<ActionState, FormData>(
@@ -23,55 +23,64 @@ export default function SignupPage() {
     resendSignupCode,
     null,
   );
+  // QuÃ© formulario se enviÃ³ Ãºltimo: define de dÃ³nde sale la alerta, asÃ­ un
+  // mensaje viejo no tapa al nuevo.
+  const [lastAction, setLastAction] = useState<Step>("signup");
+  // Cambia en cada envÃ­o: la alerta repite la animaciÃ³n aunque el mensaje se repita.
+  const [attempt, setAttempt] = useState(0);
   const router = useRouter();
 
   const email = verifyState?.email ?? signupState?.email ?? resendState?.email ?? "";
-  const step: "form" | "verify" =
+  const showVerify =
     verifyState?.ok ||
     verifyState?.step === "verify" ||
     signupState?.step === "verify" ||
-    resendState?.step === "verify"
-      ? "verify"
-      : "form";
+    resendState?.step === "verify";
 
-  // Al confirmar el código: mostramos la alerta (del state) y navegamos al panel.
+  // Al confirmar el cÃ³digo: mostramos la alerta arriba y reciÃ©n despuÃ©s navegamos.
   useEffect(() => {
     if (verifyState?.ok) {
-      const t = setTimeout(() => router.push("/"), 2000);
+      const t = setTimeout(() => router.push("/"), 1800);
       return () => clearTimeout(t);
     }
   }, [verifyState, router]);
 
-  const errorMessage =
-    (verifyState && !verifyState.ok && verifyState.message) ||
-    (resendState && !resendState.ok && resendState.message) ||
-    (signupState && !signupState.ok && !signupState.step ? signupState.message : null);
+  const activeState =
+    lastAction === "resend" ? resendState : lastAction === "verify" ? verifyState : signupState;
 
-  const infoMessage =
-    (verifyState?.ok && verifyState.message) ||
-    (resendState?.ok && resendState.message) ||
-    (signupState?.ok && signupState.message) ||
-    null;
+  const pending = signupPending || verifyPending || resendPending;
+  const toast: { message: string; tone: ToastTone } | null =
+    pending || !activeState
+      ? null
+      : { message: activeState.message, tone: activeState.ok ? "success" : "error" };
 
-  const devCode =
-    (verifyState?.devCode ?? resendState?.devCode ?? signupState?.devCode) || null;
+  const devCode = activeState?.devCode ?? null;
+
+  function handleSubmit(step: Step) {
+    setLastAction(step);
+    setAttempt((n) => n + 1);
+  }
 
   return (
     <div className="mx-auto w-full max-w-md pt-10">
-      {verifyState?.ok ? (
-        <div role="status" className={TOAST}>
-          {verifyState.message}
-        </div>
-      ) : null}
+      <Toast
+        key={`${attempt}:${toast?.message ?? "none"}`}
+        message={toast?.message ?? null}
+        tone={toast?.tone}
+      />
 
-      {step === "form" ? (
+      {!showVerify ? (
         <>
           <h1 className="text-xl font-semibold tracking-tight">Crear cuenta</h1>
           <p className="mt-1 text-sm text-muted">
-            Empezá a trackear tus finanzas. Te mandamos un código para confirmar tu correo.
+            EmpezÃ¡ a trackear tus finanzas. Te mandamos un cÃ³digo para confirmar tu correo.
           </p>
 
-          <form action={signupAction} className="card mt-6 space-y-4 p-4">
+          <form
+            action={signupAction}
+            onSubmit={() => handleSubmit("signup")}
+            className="card mt-6 space-y-4 p-4"
+          >
             <div>
               <label className="label" htmlFor="name">
                 Nombre
@@ -86,7 +95,7 @@ export default function SignupPage() {
             </div>
             <div>
               <label className="label" htmlFor="password">
-                Contraseña
+                ContraseÃ±a
               </label>
               <input
                 id="password"
@@ -97,33 +106,31 @@ export default function SignupPage() {
                 required
                 className="input"
               />
-              <p className="mt-1 text-[11px] text-muted">Mínimo 6 caracteres.</p>
+              <p className="mt-1 text-[11px] text-muted">MÃ­nimo 6 caracteres.</p>
             </div>
 
             <button type="submit" className="btn btn-primary w-full" disabled={signupPending}>
-              {signupPending ? "Enviando código…" : "Crear cuenta"}
+              {signupPending ? "Enviando cÃ³digoâ€¦" : "Crear cuenta"}
             </button>
-
-            {errorMessage ? (
-              <p role="alert" className="text-[12px] font-medium text-danger">
-                {errorMessage}
-              </p>
-            ) : null}
           </form>
         </>
       ) : (
         <>
-          <h1 className="text-xl font-semibold tracking-tight">Confirmá tu correo</h1>
+          <h1 className="text-xl font-semibold tracking-tight">ConfirmÃ¡ tu correo</h1>
           <p className="mt-1 text-sm text-muted">
-            Mandamos un código de 6 dígitos a{" "}
+            Mandamos un cÃ³digo de 6 dÃ­gitos a{" "}
             <span className="font-medium text-foreground">{email}</span>. Vence en 10 minutos.
           </p>
 
-          <form action={verifyAction} className="card mt-6 space-y-4 p-4">
+          <form
+            action={verifyAction}
+            onSubmit={() => handleSubmit("verify")}
+            className="card mt-6 space-y-4 p-4"
+          >
             <input type="hidden" name="email" value={email} />
             <div>
               <label className="label" htmlFor="code">
-                Código
+                CÃ³digo
               </label>
               <input
                 id="code"
@@ -141,45 +148,34 @@ export default function SignupPage() {
             </div>
 
             <button type="submit" className="btn btn-primary w-full" disabled={verifyPending}>
-              {verifyPending ? "Confirmando…" : "Confirmar cuenta"}
+              {verifyPending ? "Confirmandoâ€¦" : "Confirmar cuenta"}
             </button>
-
-            {infoMessage && !verifyState?.ok ? (
-              <p role="status" className="text-[12px] font-medium text-accent">
-                {infoMessage}
-              </p>
-            ) : null}
-
-            {errorMessage ? (
-              <p role="alert" className="text-[12px] font-medium text-danger">
-                {errorMessage}
-              </p>
-            ) : null}
 
             {devCode ? (
               <p className="rounded-lg border border-line bg-surface-2 p-2 text-center text-[11px] text-muted">
-                Modo desarrollo: el código es <span className="font-mono text-foreground">{devCode}</span>
+                Modo desarrollo: el cÃ³digo es{" "}
+                <span className="font-mono text-foreground">{devCode}</span>
               </p>
             ) : null}
           </form>
 
-          <form action={resendAction} className="mt-3">
+          <form
+            action={resendAction}
+            onSubmit={() => handleSubmit("resend")}
+            className="mt-3"
+          >
             <input type="hidden" name="email" value={email} />
-            <button
-              type="submit"
-              className="btn btn-ghost w-full"
-              disabled={resendPending}
-            >
-              {resendPending ? "Enviando…" : "Enviar otro código"}
+            <button type="submit" className="btn btn-ghost w-full" disabled={resendPending}>
+              {resendPending ? "Enviandoâ€¦" : "Enviar otro cÃ³digo"}
             </button>
           </form>
         </>
       )}
 
       <p className="mt-4 text-center text-[13px] text-muted">
-        Ya tenés cuenta?{" "}
+        Â¿Ya tenÃ©s cuenta?{" "}
         <Link href="/login" className="font-semibold text-accent underline">
-          Ingresá
+          IngresÃ¡
         </Link>
       </p>
     </div>

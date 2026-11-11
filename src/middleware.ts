@@ -13,9 +13,13 @@ const PUBLIC_PATHS = ["/login", "/signup", "/api/health", "/manifest.webmanifest
 export async function middleware(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const session = token ? await verifySessionToken(token) : null;
-  const { pathname } = request.nextUrl;
+  const { pathname, searchParams } = request.nextUrl;
 
   const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  // Al cerrar sesión redirigimos a /login?salida=1. Si el navegador todavía manda
+  // la cookie vieja en ese primer request, no lo devolvemos al panel: dejamos que
+  // el login se muestre (la cookie ya fue borrada por la action).
+  const isLogoutLanding = pathname === "/login" && searchParams.has("salida");
 
   let response: NextResponse;
 
@@ -23,7 +27,7 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     response = NextResponse.redirect(url);
-  } else if (session && (pathname === "/login" || pathname === "/signup")) {
+  } else if (session && !isLogoutLanding && (pathname === "/login" || pathname === "/signup")) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     response = NextResponse.redirect(url);

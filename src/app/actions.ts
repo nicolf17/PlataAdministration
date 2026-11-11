@@ -5,7 +5,13 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { parseInputDate } from "@/lib/dates";
-import { hashPassword, verifyPassword, createSession, getSessionUser } from "@/lib/auth";
+import {
+  SESSION_COOKIE,
+  createSession,
+  getSessionUser,
+  hashPassword,
+  verifyPassword,
+} from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { sendVerificationEmail } from "@/lib/email";
 import { parseAmountToMinor } from "@/lib/money";
@@ -232,9 +238,12 @@ export async function deleteTransaction(formData: FormData): Promise<void> {
 
 export async function logout(_prev: ActionState): Promise<ActionState> {
   const { cookies } = await import("next/headers");
+  const { redirect } = await import("next/navigation");
   const cookieStore = await cookies();
-  cookieStore.delete("plata_session");
-  return { ok: true, message: "Sesión cerrada." };
+  cookieStore.delete(SESSION_COOKIE);
+  // Sin esto la persona quedaba parada en el módulo con el cartel "Sesión cerrada".
+  // Al volver al login, la alerta la muestra esa pantalla con animación.
+  return redirect("/login?salida=1");
 }
 
 export async function signup(_prev: ActionState, formData: FormData): Promise<ActionState> {
