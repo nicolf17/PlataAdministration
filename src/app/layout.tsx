@@ -27,7 +27,9 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: "Plata",
-    statusBarStyle: "black-translucent",
+    // "black-translucent" hacía que la app se dibujara POR DEBAJO de la barra
+    // de estado: el header quedaba comido arriba y se veía como difuminado.
+    statusBarStyle: "black",
   },
   icons: {
     icon: [

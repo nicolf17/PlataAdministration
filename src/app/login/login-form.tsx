@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useState } from "react";
 
 import { login } from "@/app/actions";
 import type { ActionState } from "@/app/actions";
-import { Toast, type ToastTone } from "@/components/toast";
+import { Toast } from "@/components/toast";
 
 export function LoginForm({ loggedOut = false }: { loggedOut?: boolean }) {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(login, null);
@@ -14,22 +13,14 @@ export function LoginForm({ loggedOut = false }: { loggedOut?: boolean }) {
   // Cambia en cada envío: fuerza a la alerta a repetir la animación aunque el
   // mensaje sea el mismo (por ejemplo, dos veces "Email o contraseña inválidos").
   const [attempt, setAttempt] = useState(0);
-  const router = useRouter();
 
-  // Al loguearse con éxito: la alerta se muestra arriba y recién después navegamos.
-  useEffect(() => {
-    if (state?.ok) {
-      const t = setTimeout(() => router.push("/"), 1600);
-      return () => clearTimeout(t);
-    }
-  }, [state, router]);
-
-  const toast: { message: string; tone: ToastTone } | null = pending
+  // El login exitoso no se queda acá: la action redirige al panel.
+  const toast = pending
     ? null
-    : state
-      ? { message: state.message, tone: state.ok ? "success" : "error" }
+    : state && !state.ok
+      ? { message: state.message, tone: "error" as const }
       : salida
-        ? { message: "Sesión cerrada.", tone: "success" }
+        ? { message: "Sesión cerrada.", tone: "success" as const }
         : null;
 
   return (

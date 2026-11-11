@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 
 import { getSessionUser } from "@/lib/auth";
 import { NavLinks } from "@/components/nav-links";
@@ -41,9 +41,10 @@ export async function Shell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      {/* Fondo sólido (sin transparencia ni blur): en la PWA instalada el
-          header translúcido se veía lavado y los íconos perdían contraste. */}
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-[#080d13] px-3 pb-2.5 pt-[calc(env(safe-area-inset-top)+0.625rem)] md:hidden">
+      {/* Mismo color que el fondo de la app y la barra de estado: sin
+          transparencia ni blur, así en la PWA instalada no queda una banda
+          lavada arriba. */}
+      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-[#070b10] px-3 pb-2.5 pt-[calc(env(safe-area-inset-top)+0.625rem)] md:hidden">
         <Link href="/" className="flex items-center gap-2">
           <span className="grid size-7 place-items-center rounded-lg bg-accent text-xs font-black text-[#04231b]">
             P
@@ -63,7 +64,7 @@ export async function Shell({ children }: { children: React.ReactNode }) {
         </div>
       </main>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-[#080d13] pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-[#070b10] pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden">
         <NavLinks variant="mobile" />
       </div>
     </div>

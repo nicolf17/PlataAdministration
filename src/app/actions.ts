@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { z } from "zod";
 
@@ -238,7 +239,6 @@ export async function deleteTransaction(formData: FormData): Promise<void> {
 
 export async function logout(_prev: ActionState): Promise<ActionState> {
   const { cookies } = await import("next/headers");
-  const { redirect } = await import("next/navigation");
   const cookieStore = await cookies();
   cookieStore.delete(SESSION_COOKIE);
   // Sin esto la persona quedaba parada en el módulo con el cartel "Sesión cerrada".
@@ -420,8 +420,10 @@ export async function login(_prev: ActionState, formData: FormData): Promise<Act
     return { ok: false, message: "Confirmá tu cuenta con el código que te enviamos por correo." };
   }
   await createSession(user.id);
-  // No redirigimos acá: la page muestra la alerta de éxito y navega cuando el state llega.
-  return { ok: true, message: "Sesión iniciada." };
+  // Redirigimos desde el servidor: la cookie ya viaja en este request, así la
+  // navegación a "/" pinta el panel y no se queda en el login.
+  revalidatePath("/", "layout");
+  return redirect("/?ingreso=1");
 }
 
 const accountTypes = ["CASH", "SAVINGS"] as const;

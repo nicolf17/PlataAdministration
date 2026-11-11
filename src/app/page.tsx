@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/page-header";
 import { ProgressBar } from "@/components/progress-bar";
 import { RecommendationsPanel } from "@/components/recommendation-card";
 import { StatCard } from "@/components/stat-card";
+import { Toast } from "@/components/toast";
 import { RecentList } from "@/components/transaction-list";
 import { currentMonthKey, isValidMonthKey, monthLabel } from "@/lib/dates";
 import { ACCOUNT_TYPE_LABEL } from "@/lib/labels";
@@ -24,7 +25,7 @@ export const instant = false;
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mes?: string }>;
+  searchParams: Promise<{ mes?: string; ingreso?: string }>;
 }) {
   const params = await searchParams;
   await connection();
@@ -37,6 +38,10 @@ export default async function DashboardPage({
 
   return (
     <>
+      {/* La action de login redirige con ?ingreso=1: la bienvenida se muestra
+          acá, ya en el panel, en vez de retener a la persona en el login. */}
+      {params.ingreso === "1" ? <Toast message="Sesión iniciada." /> : null}
+
       <PageHeader
         title="Panel"
         description={`Resumen de ${monthLabel(month)}`}
