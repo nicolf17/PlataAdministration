@@ -1,5 +1,6 @@
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { createSessionToken, verifySessionToken } from "@/lib/session-token";
 
@@ -32,11 +33,19 @@ export async function createSession(userId: string): Promise<void> {
   await prisma.session.create({
     data: { tokenHash, userId, expiresAt: new Date(Date.now() + SESSION_TTL_SECONDS * 1000) },
   });
+  // Setea la cookie de sesión (httpOnly) para que la request actual quede autenticada.
+  const cookieStore = await cookies();
+  cookieStore.set(SESSION_COOKIE, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: SESSION_TTL_SECONDS,
+  });
 }
 
 export async function getSessionUser(): Promise<SessionUser | null> {
   // Se lee el token firmado de las cookies de la request actual.
-  const { cookies } = await import("next/headers");
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (!token) return null;
@@ -48,7 +57,6 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 }
 
 export async function clearSession(): Promise<void> {
-  const { cookies } = await import("next/headers");
   const cookieStore = await cookies();
   cookieStore.delete(SESSION_COOKIE);
 }
