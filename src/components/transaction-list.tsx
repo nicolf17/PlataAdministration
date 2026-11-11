@@ -77,7 +77,7 @@ export function TransactionList({
                 return (
                   <li
                     key={row.id}
-                    className="group flex items-center gap-3 rounded-lg px-1 py-1.5 transition-colors hover:bg-surface-2/60"
+                    className="group flex items-center gap-2 rounded-lg px-1 py-1.5 transition-colors hover:bg-surface-2/60 sm:gap-3"
                   >
                     <span
                       className="grid size-8 shrink-0 place-items-center rounded-full border"
@@ -100,7 +100,7 @@ export function TransactionList({
                     </div>
 
                     <span
-                      className={`shrink-0 text-[13px] font-semibold tabular-nums ${
+                      className={`shrink-0 max-w-[42%] truncate text-right text-[13px] font-semibold tabular-nums ${
                         isIncome
                           ? "text-accent"
                           : isExpense
@@ -118,7 +118,7 @@ export function TransactionList({
                         <button
                           type="submit"
                           aria-label={`Eliminar ${row.description}`}
-                          className="grid size-9 min-w-9 place-items-center rounded-md text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+                          className="grid size-8 min-w-8 place-items-center rounded-md text-danger/80 transition-colors hover:bg-danger/10 hover:text-danger"
                         >
                           <IconTrash className="size-4" />
                         </button>
@@ -128,7 +128,7 @@ export function TransactionList({
                     <Link
                       href={`/movimientos?editar=${row.id}#nuevo`}
                       aria-label={`Editar ${row.description}`}
-                      className="grid size-9 min-w-9 place-items-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                      className="grid size-8 min-w-8 place-items-center rounded-md text-info/80 transition-colors hover:bg-info/10 hover:text-info"
                     >
                       <IconPencil className="size-4" />
                     </Link>

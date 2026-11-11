@@ -59,7 +59,7 @@ export function Toast({
       <div
         role={tone === "error" ? "alert" : "status"}
         aria-live={tone === "error" ? "assertive" : "polite"}
-        className={`pointer-events-auto w-full max-w-sm rounded-xl border p-3 text-center text-[13px] font-medium shadow-xl shadow-black/40 ${palette} ${
+        className={`pointer-events-auto w-full max-w-sm rounded-xl border p-3 text-center text-[13px] font-medium ${palette} ${
           leaving ? "animate-toast-out" : "animate-toast-in"
         }`}
       >

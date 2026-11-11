@@ -195,7 +195,7 @@ export function TransactionForm({
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-3">
-        <div>
+        <div className="min-w-0">
           <label className="label" htmlFor="date">
             Fecha
           </label>
@@ -204,20 +204,20 @@ export function TransactionForm({
             name="date"
             type="date"
             defaultValue={editing?.date ?? today}
-            className="input"
+            className="input w-full min-w-0"
             required
           />
         </div>
 
         {type !== "TRANSFER" ? (
-          <div>
+          <div className="min-w-0">
             <label className="label" htmlFor="categoryId">
               Categoría
             </label>
             <select
               id="categoryId"
               name="categoryId"
-              className="input"
+              className="input w-full min-w-0 truncate"
               defaultValue={editing?.categoryId ?? ""}
             >
               <option value="">Sin categoría</option>
