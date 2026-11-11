@@ -26,11 +26,11 @@ const month = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(
 // 1. Usuario base (la primera persona que usa la app en una instalación nueva).
 const userRow = db
   .prepare('SELECT id FROM "User" WHERE email = ?')
-  .get("nicolaslopezforero17@gmail.com") as { id: string } | undefined;
+  .get("nicolaslopezforero17@gmail.com");
 
-let userId: string;
-if (userRow) {
-  userId = userRow.id;
+let userId = userRow ? userRow.id : null;
+
+if (userId) {
   console.log("[bootstrap] usuario existente encontrado");
 } else {
   const password = process.env.BOOTSTRAP_PASSWORD ?? "plata12345";
@@ -38,8 +38,8 @@ if (userRow) {
   const hash = scryptSync(password, salt, 64).toString("hex");
   userId = id();
   db.prepare(
-    'INSERT INTO "User" (id, email, "passwordHash", name, "createdAt") VALUES (?, ?, ?, ?, ?)',
-  ).run(userId, "nicolaslopezforero17@gmail.com", `scrypt:${salt}:${hash}`, "Nicolas", now);
+    'INSERT INTO "User" (id, email, "passwordHash", name) VALUES (?, ?, ?, ?)',
+  ).run(userId, "nicolaslopezforero17@gmail.com", `scrypt:${salt}:${hash}`, "Nicolas");
   console.log("[bootstrap] usuario base creado");
 }
 
@@ -66,7 +66,7 @@ const cardCount = db.prepare('SELECT count(*) AS c FROM "CreditCard"').get().c;
 if (cardCount === 0) {
   db.prepare(
     'INSERT INTO "CreditCard" (id, name, "limitMinor", "closingDay", "dueDay", "userId") VALUES (?, ?, ?, ?, ?, ?)',
-  ).run(id(), "Tarjeta de crédito", 5_000_000, 25, 10, userId);
+  ).run(id(), "Tarjeta de crédito", 5000000, 25, 10, userId);
   console.log("[bootstrap] 1 tarjeta creada");
 }
 
@@ -91,9 +91,9 @@ if (budgetCount === 0) {
     .prepare('SELECT id, name FROM "Category" WHERE type = ?')
     .all("EXPENSE");
   const limits = new Map([
-    ["Alimentación", 1_200_000],
-    ["Transporte", 450_000],
-    ["Hogar", 2_300_000],
+    ["Alimentación", 1200000],
+    ["Transporte", 450000],
+    ["Hogar", 2300000],
   ]);
   const insert = db.prepare(
     'INSERT INTO "Budget" (id, "categoryId", month, "limitMinor", "userId") VALUES (?, ?, ?, ?, ?)',

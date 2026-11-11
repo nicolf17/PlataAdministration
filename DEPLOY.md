@@ -47,10 +47,20 @@ fly deploy
 
 En el primer arranque el contenedor hace automáticamente:
 
-1. `prisma migrate deploy` → crea las tablas.
-2. `prisma/bootstrap.mjs` → crea 2 cuentas, 4 categorías y 3 presupuestos
-   **solo si la base está vacía**. No crea movimientos ni borra datos.
+1. `prisma migrate deploy` → crea las tablas (`User`, `Session` y columnas
+   `userId` en las tablas de datos).
+2. `prisma/bootstrap.mjs` → crea el usuario base (email `nicolaslopezforero17@gmail.com`,
+   password por defecto `plata12345` o la de `BOOTSTRAP_PASSWORD`) **y** backfillea las
+   filas viejas sin usuario a ese usuario. Luego crea 2 cuentas, 4 categorías y 3
+   presupuestos **solo si la base está vacía**. No crea movimientos ni borra datos.
 3. `next start` → levanta la app.
+
+Las variables de entorno que usa:
+
+- `DATABASE_URL` → `file:/data/plata.db`.
+- `SESSION_SECRET` → clave de firma de las cookies de sesión (romperla invalida
+  todas las sesiones).
+- `BOOTSTRAP_PASSWORD` → password del usuario base en instalaciones nuevas.
 
 Abrila con:
 
