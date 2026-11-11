@@ -40,6 +40,8 @@ model User {
   email        String    @unique
   passwordHash String
   name         String
+  // Se completa cuando la persona confirma el código que le llega por correo.
+  emailVerifiedAt DateTime?
   createdAt    DateTime  @default(now())
 
   accounts        Account[]
@@ -61,6 +63,34 @@ model Session {
 
   @@index([userId])
   @@unique([tokenHash])
+}
+
+// Registro pendiente: existe solo entre "pedí el código" y "confirmé el código".
+// La contraseña ya viene hasheada: nunca se guarda en claro ni en memoria de sesión.
+model PendingSignup {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  codeHash     String
+  attempts     Int      @default(0)
+  expiresAt    DateTime
+  lastSentAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+// Métricas reales de performance (LCP/INP/CLS) reportadas por el navegador.
+model WebVital {
+  id        String   @id @default(cuid())
+  name      String
+  value     Float
+  rating    String?
+  path      String?
+  createdAt DateTime @default(now())
+
+  @@index([name, createdAt])
 }
 
 model Account {

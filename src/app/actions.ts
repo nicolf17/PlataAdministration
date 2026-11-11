@@ -7,11 +7,26 @@ import { z } from "zod";
 import { parseInputDate } from "@/lib/dates";
 import { hashPassword, verifyPassword, createSession, getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { sendVerificationEmail } from "@/lib/email";
 import { parseAmountToMinor } from "@/lib/money";
+import {
+  CODE_TTL_MINUTES,
+  MAX_CODE_ATTEMPTS,
+  RESEND_COOLDOWN_SECONDS,
+  codeExpiresAt,
+  generateVerificationCode,
+  hashVerificationCode,
+  verificationCodeMatches,
+} from "@/lib/verification";
 
 export type ActionState = {
   ok: boolean;
   message: string;
+  /** "verify": el registro quedó pendiente y hay que ingresar el código. */
+  step?: "verify";
+  email?: string;
+  /** Solo en desarrollo, para poder probar sin servidor de correo configurado. */
+  devCode?: string;
 } | null;
 
 const transactionTypes = ["INCOME", "EXPENSE", "TRANSFER"] as const;
@@ -229,12 +244,160 @@ export async function signup(_prev: ActionState, formData: FormData): Promise<Ac
   if (name.trim().length < 2) return { ok: false, message: "Poné tu nombre." };
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, message: "Poné un email válido." };
   if (password.length < 6) return { ok: false, message: "La contraseña debe tener al menos 6 caracteres." };
+
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) return { ok: false, message: "Ya existe una cuenta con ese email." };
-  const user = await prisma.user.create({ data: { name: name.trim(), email, passwordHash: hashPassword(password) } });
+
+  // Limpieza oportunista: registros pendientes que ya vencieron no sirven.
+  await prisma.pendingSignup.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+
+  const pending = await prisma.pendingSignup.findUnique({ where: { email } });
+  if (pending) {
+    const elapsed = (Date.now() - pending.lastSentAt.getTime()) / 1000;
+    if (elapsed < RESEND_COOLDOWN_SECONDS) {
+      const wait = Math.ceil(RESEND_COOLDOWN_SECONDS - elapsed);
+      return {
+        ok: false,
+        step: "verify",
+        email,
+        message: `Ya te enviamos un código. Esperá ${wait} s para pedir otro.`,
+      };
+    }
+  }
+
+  const code = generateVerificationCode();
+  const passwordHash = hashPassword(password);
+  const codeHash = hashVerificationCode(email, code);
+  const expiresAt = codeExpiresAt();
+  const lastSentAt = new Date();
+
+  // La cuenta NO existe todavía: solo queda el registro pendiente con la
+  // contraseña ya hasheada. Si nunca confirma, no hay cuenta que limpiar.
+  await prisma.pendingSignup.upsert({
+    where: { email },
+    create: { email, name: name.trim(), passwordHash, codeHash, expiresAt, lastSentAt },
+    update: { name: name.trim(), passwordHash, codeHash, attempts: 0, expiresAt, lastSentAt },
+  });
+
+  const sent = await sendVerificationEmail(email, name.trim(), code, CODE_TTL_MINUTES);
+  if (!sent.ok) {
+    await prisma.pendingSignup.deleteMany({ where: { email } });
+    return { ok: false, message: sent.message };
+  }
+
+  return {
+    ok: true,
+    step: "verify",
+    email,
+    message: `Te enviamos un código a ${email}.`,
+    ...(process.env.NODE_ENV === "production" ? {} : { devCode: code }),
+  };
+}
+
+export async function verifySignup(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const email = str(formData, "email").trim().toLowerCase();
+  const code = str(formData, "code").replace(/\D/g, "");
+  if (code.length !== 6) {
+    return { ok: false, step: "verify", email, message: "El código son 6 dígitos." };
+  }
+
+  const pending = await prisma.pendingSignup.findUnique({ where: { email } });
+  if (!pending) {
+    return { ok: false, step: "verify", email, message: "Pedí un código nuevo para continuar." };
+  }
+
+  if (pending.expiresAt.getTime() < Date.now()) {
+    await prisma.pendingSignup.deleteMany({ where: { email } });
+    return { ok: false, step: "verify", email, message: "El código venció. Pedí uno nuevo." };
+  }
+
+  if (pending.attempts >= MAX_CODE_ATTEMPTS) {
+    await prisma.pendingSignup.deleteMany({ where: { email } });
+    return {
+      ok: false,
+      step: "verify",
+      email,
+      message: "Demasiados intentos con ese código. Empezá el registro de nuevo.",
+    };
+  }
+
+  if (!verificationCodeMatches(email, code, pending.codeHash)) {
+    const attempts = pending.attempts + 1;
+    await prisma.pendingSignup.update({ where: { email }, data: { attempts } });
+    const left = MAX_CODE_ATTEMPTS - attempts;
+    return {
+      ok: false,
+      step: "verify",
+      email,
+      message:
+        left > 0
+          ? `Código incorrecto. Te quedan ${left} ${left === 1 ? "intento" : "intentos"}.`
+          : "Código incorrecto. Pedí uno nuevo.",
+    };
+  }
+
+  const alreadyExists = await prisma.user.findUnique({ where: { email } });
+  if (alreadyExists) {
+    await prisma.pendingSignup.deleteMany({ where: { email } });
+    return { ok: false, message: "Ya existe una cuenta con ese email." };
+  }
+
+  const user = await prisma.user.create({
+    data: {
+      name: pending.name,
+      email,
+      passwordHash: pending.passwordHash,
+      emailVerifiedAt: new Date(),
+    },
+  });
+  await prisma.pendingSignup.deleteMany({ where: { email } });
   await createSession(user.id);
-  // No redirigimos acá: la page muestra la alerta de éxito y navega cuando el state llega.
-  return { ok: true, message: "Cuenta creada." };
+
+  return { ok: true, message: "Cuenta confirmada. ¡Bienvenido!" };
+}
+
+export async function resendSignupCode(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const email = str(formData, "email").trim().toLowerCase();
+  const pending = await prisma.pendingSignup.findUnique({ where: { email } });
+  if (!pending) {
+    return { ok: false, step: "verify", email, message: "Empezá el registro de nuevo." };
+  }
+
+  const elapsed = (Date.now() - pending.lastSentAt.getTime()) / 1000;
+  if (elapsed < RESEND_COOLDOWN_SECONDS) {
+    const wait = Math.ceil(RESEND_COOLDOWN_SECONDS - elapsed);
+    return {
+      ok: false,
+      step: "verify",
+      email,
+      message: `Esperá ${wait} s antes de pedir otro código.`,
+    };
+  }
+
+  const code = generateVerificationCode();
+  await prisma.pendingSignup.update({
+    where: { email },
+    data: {
+      codeHash: hashVerificationCode(email, code),
+      attempts: 0,
+      expiresAt: codeExpiresAt(),
+      lastSentAt: new Date(),
+    },
+  });
+
+  const sent = await sendVerificationEmail(email, pending.name, code, CODE_TTL_MINUTES);
+  if (!sent.ok) return { ok: false, step: "verify", email, message: sent.message };
+
+  return {
+    ok: true,
+    step: "verify",
+    email,
+    message: "Te enviamos un código nuevo.",
+    ...(process.env.NODE_ENV === "production" ? {} : { devCode: code }),
+  };
 }
 
 export async function login(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -244,6 +407,9 @@ export async function login(_prev: ActionState, formData: FormData): Promise<Act
   if (!user) return { ok: false, message: "Email o contraseña inválidos." };
   const ok = verifyPassword(password, user.passwordHash);
   if (!ok) return { ok: false, message: "Email o contraseña inválidos." };
+  if (!user.emailVerifiedAt) {
+    return { ok: false, message: "Confirmá tu cuenta con el código que te enviamos por correo." };
+  }
   await createSession(user.id);
   // No redirigimos acá: la page muestra la alerta de éxito y navega cuando el state llega.
   return { ok: true, message: "Sesión iniciada." };

@@ -2,16 +2,21 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypt
 
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { createSessionToken, verifySessionToken } from "@/lib/session-token";
+import {
+  SESSION_COOKIE,
+  SESSION_TTL_SECONDS,
+  createSessionToken,
+  sessionCookieOptions,
+  verifySessionToken,
+} from "@/lib/session-token";
+
+export { SESSION_COOKIE };
 
 export type SessionUser = {
   id: string;
   email: string;
   name: string;
 };
-
-export const SESSION_COOKIE = "plata_session";
-const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 días
 
 export function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");
@@ -35,13 +40,11 @@ export async function createSession(userId: string): Promise<void> {
   });
   // Setea la cookie de sesión (httpOnly) para que la request actual quede autenticada.
   const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: SESSION_TTL_SECONDS,
-  });
+  cookieStore.set(
+    SESSION_COOKIE,
+    token,
+    sessionCookieOptions(process.env.NODE_ENV === "production"),
+  );
 }
 
 export async function getSessionUser(): Promise<SessionUser | null> {

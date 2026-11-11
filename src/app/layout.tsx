@@ -4,6 +4,7 @@ import { Suspense } from "react";
 
 import { PwaRegister } from "@/components/pwa-register";
 import { Shell } from "@/components/shell";
+import { WebVitals } from "@/components/web-vitals";
 
 import "./globals.css";
 
@@ -65,6 +66,7 @@ export default function RootLayout({
           <Shell>{children}</Shell>
         </Suspense>
         <PwaRegister />
+        <WebVitals />
       </body>
     </html>
   );

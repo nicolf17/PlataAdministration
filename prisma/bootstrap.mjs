@@ -38,10 +38,15 @@ if (userId) {
   const hash = scryptSync(password, salt, 64).toString("hex");
   userId = id();
   db.prepare(
-    'INSERT INTO "User" (id, email, "passwordHash", name) VALUES (?, ?, ?, ?)',
+    'INSERT INTO "User" (id, email, "passwordHash", name, "emailVerifiedAt") VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
   ).run(userId, "nicolaslopezforero17@gmail.com", `scrypt:${salt}:${hash}`, "Nicolas");
   console.log("[bootstrap] usuario base creado");
 }
+
+// Las cuentas previas a la verificación por correo ya estaban en uso: se dan por verificadas.
+db.prepare(
+  'UPDATE "User" SET "emailVerifiedAt" = "createdAt" WHERE "emailVerifiedAt" IS NULL',
+).run();
 
 // 2. Backfill: las filas viejas (sin usuario) pasan a la primera cuenta.
 for (const table of ["Transaction", "Budget", "Category", "CreditCard", "Account"]) {

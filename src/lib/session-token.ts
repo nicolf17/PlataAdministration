@@ -1,8 +1,16 @@
 // Token de sesión: firma HMAC-SHA256 con WebCrypto (disponible en Edge y Node).
 // Formato: "<payload>.<firma>" donde payload = base64(JSON { userId, exp }).
+//
+// Sesión deslizante: el token renueva su vencimiento mientras la persona lo use.
+// La renovación se hace en el middleware (Edge) sin tocar la base de datos:
+// el token es autocontenido y firmado, así que alcanza con re-firmarlo.
+
+export const SESSION_COOKIE = "plata_session";
+export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 días desde el último uso
+// Cuando al token le queda menos que esto, se re-emite con vencimiento nuevo.
+const RENEW_BEFORE_SECONDS = 60 * 60 * 24 * 5; // 5 días
 
 const SESSION_SECRET = process.env.SESSION_SECRET ?? "plata-dev-secret-change-me";
-const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 días
 
 function toBase64Url(input: string): string {
   const bytes = new TextEncoder().encode(input);
@@ -35,7 +43,9 @@ async function hmac(payload: string): Promise<string> {
 }
 
 export async function createSessionToken(userId: string): Promise<string> {
-  const payload = toBase64Url(JSON.stringify({ userId, exp: Date.now() + SESSION_TTL_SECONDS * 1000 }));
+  const payload = toBase64Url(
+    JSON.stringify({ userId, exp: Date.now() + SESSION_TTL_SECONDS * 1000 }),
+  );
   const sig = await hmac(payload);
   return `${payload}.${sig}`;
 }
@@ -57,4 +67,27 @@ export async function verifySessionToken(
   } catch {
     return null;
   }
+}
+
+/** ¿Conviene re-emitir el token? Solo si todavía es válido y está por vencer. */
+export function shouldRenewSession(exp: number, now = Date.now()): boolean {
+  const remaining = exp - now;
+  return remaining > 0 && remaining < RENEW_BEFORE_SECONDS * 1000;
+}
+
+/** Re-emite el token con vencimiento nuevo, conservando el usuario. */
+export async function renewSessionToken(token: string): Promise<string | null> {
+  const session = await verifySessionToken(token);
+  if (!session) return null;
+  return createSessionToken(session.userId);
+}
+
+export function sessionCookieOptions(secure: boolean) {
+  return {
+    httpOnly: true,
+    secure,
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: SESSION_TTL_SECONDS,
+  };
 }
