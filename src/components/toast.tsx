@@ -55,7 +55,7 @@ export function Toast({
       : "border-danger/40 bg-surface text-danger";
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex justify-center px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+    <div className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex justify-center px-3 pt-[max(3.75rem,calc(env(safe-area-inset-top)+3.25rem))]">
       <div
         role={tone === "error" ? "alert" : "status"}
         aria-live={tone === "error" ? "assertive" : "polite"}

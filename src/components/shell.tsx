@@ -8,6 +8,16 @@ import { UserMenu } from "@/components/user-menu";
 export async function Shell({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
 
+  // Sin sesión las únicas pantallas son /login y /signup: no tiene sentido
+  // mostrar navegación ni un botón para cerrar una sesión que no existe.
+  if (!user) {
+    return (
+      <main className="mx-auto w-full max-w-6xl px-3 pt-3 sm:px-4 sm:pt-5 md:px-8 md:pt-10">
+        {children}
+      </main>
+    );
+  }
+
   return (
     <div className="min-h-dvh md:flex">
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line/80 px-4 py-6 md:flex">
@@ -21,32 +31,29 @@ export async function Shell({ children }: { children: React.ReactNode }) {
         <NavLinks />
 
         <div className="mt-auto rounded-xl border border-line bg-surface/60 p-3">
-          {user ? (
-            <div className="mb-3">
-              <p className="truncate text-[12px] font-semibold">{user.name}</p>
-              <p className="truncate text-[11px] text-muted">{user.email}</p>
-            </div>
-          ) : null}
+          <div className="mb-3">
+            <p className="truncate text-[12px] font-semibold">{user.name}</p>
+            <p className="truncate text-[11px] text-muted">{user.email}</p>
+          </div>
           <p className="text-[11px] leading-relaxed text-muted">
             Tus datos en un servidor privado propio, en SQLite.
           </p>
         </div>
       </aside>
 
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line/70 bg-[#080d13]/90 px-3 py-2.5 pt-[env(safe-area-inset-top)] backdrop-blur md:hidden">
+      {/* Fondo sólido (sin transparencia ni blur): en la PWA instalada el
+          header translúcido se veía lavado y los íconos perdían contraste. */}
+      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-[#080d13] px-3 pb-2.5 pt-[calc(env(safe-area-inset-top)+0.625rem)] md:hidden">
         <Link href="/" className="flex items-center gap-2">
           <span className="grid size-7 place-items-center rounded-lg bg-accent text-xs font-black text-[#04231b]">
             P
           </span>
-          <span className="text-[15px] font-semibold tracking-tight">
-            plata.
-          </span>
+          <span className="text-[15px] font-semibold tracking-tight">plata.</span>
         </Link>
 
         <div className="flex items-center gap-2">
           <NewMovementButton />
-
-          <UserMenu name={user?.name ?? "?"} />
+          <UserMenu name={user.name} />
         </div>
       </header>
 
@@ -56,7 +63,7 @@ export async function Shell({ children }: { children: React.ReactNode }) {
         </div>
       </main>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-[#080d13]/95 pb-[max(0.25rem,env(safe-area-inset-bottom))] backdrop-blur md:hidden">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-[#080d13] pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden">
         <NavLinks variant="mobile" />
       </div>
     </div>

@@ -17,7 +17,7 @@ export function UserMenu({ name }: { name: string }) {
         <button
           type="submit"
           disabled={pending}
-          className="grid size-9 min-w-9 place-items-center rounded-md border border-line text-muted transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-60"
+          className="grid size-9 min-w-9 place-items-center rounded-md border border-[#243447] bg-[#0d141d] text-foreground/75 transition-colors hover:border-[#2f4358] hover:bg-surface-2 hover:text-foreground active:bg-surface-2 disabled:opacity-60"
           aria-label="Cerrar sesión"
           title="Cerrar sesión"
         >
