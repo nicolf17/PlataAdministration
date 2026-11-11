@@ -1,13 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useEffect } from "react";
 
 import { login } from "@/app/actions";
 import type { ActionState } from "@/app/actions";
 
 export default function LoginPage() {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(login, null);
+  const router = useRouter();
+
+  // Al loguearse con éxito: mostramos la alerta (del state) y navegamos al panel.
+  useEffect(() => {
+    if (state?.ok) {
+      const t = setTimeout(() => router.push("/"), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [state, router]);
 
   return (
     <div className="mx-auto w-full max-w-md pt-10">
@@ -30,8 +40,14 @@ export default function LoginPage() {
           {pending ? "Ingresando…" : "Ingresar"}
         </button>
 
-        {state ? (
-          <p role="status" className={`text-[12px] font-medium ${state.ok ? "text-accent" : "text-danger"}`}>
+        {state?.ok ? (
+          <p role="status" className="text-[12px] font-medium text-accent">
+            Sesión iniciada. ¡Bienvenido!
+          </p>
+        ) : null}
+
+        {state && !state.ok ? (
+          <p role="status" className="text-[12px] font-medium text-danger">
             {state.message}
           </p>
         ) : null}

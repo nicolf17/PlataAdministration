@@ -245,7 +245,7 @@ export async function login(_prev: ActionState, formData: FormData): Promise<Act
   const ok = verifyPassword(password, user.passwordHash);
   if (!ok) return { ok: false, message: "Email o contraseña inválidos." };
   await createSession(user.id);
-  redirect("/");
+  // No redirigimos acá: la page muestra la alerta de éxito y navega cuando el state llega.
   return { ok: true, message: "Sesión iniciada." };
 }
 
