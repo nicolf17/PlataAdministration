@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Suspense } from "react";
 
+import { ErrorBoundary } from "@/components/error-boundary";
+import { ErrorDiagnostics } from "@/components/error-diagnostics";
 import { PwaRegister } from "@/components/pwa-register";
 import { Shell } from "@/components/shell";
 import { WebVitals } from "@/components/web-vitals";
@@ -64,9 +66,12 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        <Suspense fallback={null}>
-          <Shell>{children}</Shell>
-        </Suspense>
+        <ErrorDiagnostics />
+        <ErrorBoundary>
+          <Suspense fallback={null}>
+            <Shell>{children}</Shell>
+          </Suspense>
+        </ErrorBoundary>
         <PwaRegister />
         <WebVitals />
       </body>

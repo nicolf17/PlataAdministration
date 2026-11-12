@@ -1,4 +1,4 @@
-const CACHE = "plata-static-v3";
+const CACHE = "plata-static-v4";
 const OFFLINE = "/offline.html";
 const PRECACHE = [
   OFFLINE,
@@ -35,9 +35,10 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   // Navegación: siempre red primero; si no hay conexión, pantalla offline.
+  // El AbortSignal evita que una navegación nunca resuelta congele la pantalla.
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).catch(async () => {
+      fetch(request, { signal: AbortSignal.timeout(10000) }).catch(async () => {
         const offline = await caches.match(OFFLINE);
         return offline || Response.error();
       }),
@@ -54,7 +55,7 @@ self.addEventListener("fetch", (event) => {
       caches.open(CACHE).then(async (cache) => {
         const cached = await cache.match(request);
         if (cached) return cached;
-        const response = await fetch(request);
+        const response = await fetch(request, { signal: AbortSignal.timeout(10000) });
         if (response.ok) cache.put(request, response.clone());
         return response;
       }),
