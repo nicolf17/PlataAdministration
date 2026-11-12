@@ -7,7 +7,6 @@ import { AmountInput } from "@/components/amount-input";
 
 const TYPES = [
   { value: "CASH", label: "Efectivo" },
-  { value: "SAVINGS", label: "Cuenta de ahorros" },
 ];
 
 export function AccountForm() {
@@ -19,9 +18,9 @@ export function AccountForm() {
   return (
     <details className="card group p-4 open:pb-5">
       <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-semibold">
-        Agregar efectivo o cuenta
+        Agregar método de pago
         <span className="text-xs font-normal text-muted group-open:hidden">
-          Efectivo o ahorros
+          Efectivo
         </span>
       </summary>
 
@@ -33,7 +32,7 @@ export function AccountForm() {
           <input
             id="account-name"
             name="name"
-            placeholder="Ej: Cuenta de ahorros"
+            placeholder="Ej: Efectivo"
             className="input"
             required
           />
@@ -47,7 +46,7 @@ export function AccountForm() {
             id="account-type"
             name="type"
             className="input"
-            defaultValue="SAVINGS"
+            defaultValue="CASH"
           >
             {TYPES.map((type) => (
               <option key={type.value} value={type.value}>
