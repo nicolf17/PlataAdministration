@@ -22,6 +22,16 @@ export async function Shell({ children }: { children: React.ReactNode }) {
         <div aria-hidden className="auth-aurora" />
         <div aria-hidden className="auth-grid" />
 
+        {/* Partículas luminosas: luces que brotan desde abajo hacia arriba
+            como chispas, sin interacción y con animación GPU-friendly. */}
+        <div aria-hidden className="auth-particles">
+          <span className="auth-particle" style={{ left: "16%", animationDelay: "0s" }} />
+          <span className="auth-particle" style={{ left: "33%", animationDelay: "1.6s" }} />
+          <span className="auth-particle" style={{ left: "50%", animationDelay: "0.8s" }} />
+          <span className="auth-particle" style={{ left: "66%", animationDelay: "2.2s" }} />
+          <span className="auth-particle" style={{ left: "82%", animationDelay: "1.3s" }} />
+        </div>
+
         <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col px-3 pt-3 sm:px-4 sm:pt-5 md:px-8 md:pt-10">
           <div className="flex-1">{children}</div>
           <p className="pb-5 pt-8 text-center text-[11px] tracking-wide text-muted/70">

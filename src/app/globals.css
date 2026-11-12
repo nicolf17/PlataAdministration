@@ -220,26 +220,26 @@
   left: -6rem;
   height: 26rem;
   width: 26rem;
-  background: radial-gradient(circle, rgba(52, 211, 153, 0.42) 0%, transparent 68%);
+  background: radial-gradient(circle, rgba(52, 211, 153, 0.32) 0%, transparent 68%);
   animation: auth-float-a 16s ease-in-out infinite;
 }
 
 .auth-orb-b {
-  bottom: -10rem;
-  right: -7rem;
-  height: 30rem;
-  width: 30rem;
-  background: radial-gradient(circle, rgba(96, 165, 250, 0.32) 0%, transparent 68%);
+  bottom: -8rem;
+  right: -6rem;
+  height: 24rem;
+  width: 24rem;
+  background: radial-gradient(circle, rgba(96, 165, 250, 0.22) 0%, transparent 68%);
   animation: auth-float-b 20s ease-in-out infinite;
 }
 
 .auth-orb-c {
   top: 38%;
   left: 50%;
-  height: 22rem;
-  width: 22rem;
-  margin-left: -11rem;
-  background: radial-gradient(circle, rgba(52, 211, 153, 0.18) 0%, transparent 70%);
+  height: 20rem;
+  width: 20rem;
+  margin-left: -10rem;
+  background: radial-gradient(circle, rgba(52, 211, 153, 0.14) 0%, transparent 70%);
   animation: auth-float-a 24s ease-in-out infinite reverse;
 }
 
@@ -273,6 +273,43 @@
   mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent 72%);
   -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent 72%);
   animation: auth-grid-drift 9s linear infinite;
+}
+
+/* Contenedor de partículas: luces que brotan desde abajo hacia arriba. */
+.auth-particles {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.auth-particle {
+  position: absolute;
+  bottom: -12%;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(110, 231, 183, 0.95) 0%, rgba(110, 231, 183, 0.25) 45%, transparent 70%);
+  filter: blur(0.5px);
+  animation: auth-particle-rise 9s linear infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes auth-particle-rise {
+  0% {
+    transform: translateY(0) scale(0.4);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.9;
+  }
+  55% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: translateY(-72vh) scale(1.2);
+    opacity: 0;
+  }
 }
 
 @keyframes auth-float-a {
@@ -318,7 +355,8 @@
   .auth-orb-b,
   .auth-orb-c,
   .auth-aurora,
-  .auth-grid {
+  .auth-grid,
+  .auth-particle {
     animation: none;
   }
 }
