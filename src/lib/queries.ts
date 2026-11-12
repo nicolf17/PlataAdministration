@@ -368,7 +368,7 @@ export async function getBudgetPageData(month: string) {
         ratio: budget.limitMinor > 0 ? spentMinor / budget.limitMinor : 0,
       };
     }),
-    categories: spending as CategorySlice[],
+    categories,
     slices: [] as CategorySlice[],
     expenseMinor: 0,
   };
