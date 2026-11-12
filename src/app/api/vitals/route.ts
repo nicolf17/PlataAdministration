@@ -8,6 +8,21 @@ import { clientIp } from "@/lib/request-ip";
 const ALLOWED = new Set(["LCP", "INP", "CLS", "FCP", "TTFB"]);
 const RATINGS = new Set(["good", "needs-improvement", "poor"]);
 
+// Dedupe server-side: métricas repetidas casi idénticas en cortos intervalos
+// se ignoran para no saturar la tabla ni el rate limit con pings duplicados.
+const recentReports = new Map<string, number>();
+const DEDUPE_WINDOW_MS = 5_000;
+
+function shouldRecord(ip: string, name: string): boolean {
+  const key = `${ip}:${name}`;
+  const now = Date.now();
+  const last = recentReports.get(key) ?? 0;
+  if (now - last < DEDUPE_WINDOW_MS) return false;
+  recentReports.set(key, now);
+  if (recentReports.size > 10_000) recentReports.clear();
+  return true;
+}
+
 // Tope de body: una métrica real pesa menos de 300 bytes.
 const MAX_BODY_BYTES = 2048;
 
@@ -62,6 +77,10 @@ export async function POST(request: Request) {
     typeof data.rating === "string" && RATINGS.has(data.rating) ? data.rating : null;
   const path =
     typeof data.path === "string" && data.path.startsWith("/") ? data.path.slice(0, 120) : null;
+
+  if (!shouldRecord(ip, name)) {
+    return NextResponse.json({ ok: true, deduped: true });
+  }
 
   await prisma.webVital.create({ data: { name, value, rating, path } });
   return NextResponse.json({ ok: true });
