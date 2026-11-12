@@ -89,6 +89,14 @@ export default async function AccountsPage() {
           </div>
         </div>
       </section>
+
+      {/* Formularios de alta. Antes se importaban pero no se renderizaban:
+          por eso en la guía y en la app no había forma real de cargar
+          métodos de pago nuevos. */}
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <AccountForm />
+        <CardForm />
+      </div>
     </>
   );
 }

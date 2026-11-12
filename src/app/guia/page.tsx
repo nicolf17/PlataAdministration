@@ -58,7 +58,7 @@ const PASOS = [
     title: "Cargá tus métodos de pago",
     href: "/cuentas",
     Icon: IconWallet,
-    body: "Antes de anotar movimientos necesitás decir de dónde sale la plata. En «Métodos» agregá tu cuenta de efectivo, tu cuenta de banco/ahorros y, si usás, tu tarjeta de crédito con su cupo y días de corte y pago.",
+    body: "Antes de anotar movimientos necesitás decir de dónde sale la plata. En «Métodos» vas a ver lo que ya tenés cargado y acá abajo están los formularios para agregarlo: efectivo o cuenta de ahorros (con saldo inicial opcional) y tarjeta de crédito (con cupo, día de corte y día de pago).",
     tip: "El saldo inicial es la plata que tenés hoy en esa cuenta. No es obligatorio: si no lo sabés, dejalo en cero.",
   },
   {
