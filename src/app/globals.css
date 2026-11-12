@@ -350,13 +350,14 @@
   }
 }
 
+/* Nota: se dejó de respetar prefers-reduced-motion para el fondo del login
+   (orbs/partículas/grilla), porque el usuario pidió ver el fondo animado.
+   El resto de animaciones globales (toasts) siguen respeta la preferencia. */
 @media (prefers-reduced-motion: reduce) {
-  .auth-orb-a,
-  .auth-orb-b,
-  .auth-orb-c,
-  .auth-aurora,
-  .auth-grid,
-  .auth-particle {
-    animation: none;
+  .animate-toast-in,
+  .animate-toast-out {
+    animation-duration: 1ms;
   }
 }
+
+/* prefers-reduced-motion ya no anula el fondo animado del login (se quitó el override). */
