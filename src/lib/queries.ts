@@ -1,169 +1,7 @@
-import "server-only";
-
+import { requireUserId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { getSessionUser } from "@/lib/auth";
-import { monthRange, previousMonths, toInputDate } from "@/lib/dates";
-import { buildRecommendations } from "@/lib/recommendations";
-import type {
-  AccountType,
-  TransactionType,
-} from "@/generated/prisma/client";
 
-export type AccountBalance = {
-  id: string;
-  name: string;
-  type: AccountType;
-  initialMinor: number;
-  balanceMinor: number;
-  archived: boolean;
-};
-
-export type CardBalance = {
-  id: string;
-  name: string;
-  limitMinor: number;
-  debtMinor: number;
-  utilization: number;
-  closingDay: number;
-  dueDay: number;
-  archived: boolean;
-};
-
-type BalanceTx = {
-  type: TransactionType;
-  amountMinor: number;
-  accountId: string | null;
-  transferAccountId: string | null;
-  creditCardId: string | null;
-};
-
-/**
- * El saldo de una cuenta es: saldo inicial + ingresos - gastos - transferencias
- * enviadas + transferencias recibidas. Los gastos con tarjeta no la tocan.
- */
-export function computeAccountBalance(
-  initialMinor: number,
-  accountId: string,
-  transactions: BalanceTx[],
-): number {
-  return transactions.reduce((balance, tx) => {
-    if (tx.type === "INCOME" && tx.accountId === accountId) {
-      return balance + tx.amountMinor;
-    }
-    if (tx.type === "EXPENSE" && tx.accountId === accountId) {
-      return balance - tx.amountMinor;
-    }
-    if (tx.type === "TRANSFER") {
-      if (tx.accountId === accountId) return balance - tx.amountMinor;
-      if (tx.transferAccountId === accountId) return balance + tx.amountMinor;
-    }
-    return balance;
-  }, initialMinor);
-}
-
-/**
- * La deuda de una tarjeta es: compras con tarjeta - pagos a la tarjeta.
- * Un pago es una TRANSFER que sale de una cuenta y apunta a la tarjeta.
- */
-export function computeCardDebt(
-  cardId: string,
-  transactions: BalanceTx[],
-): number {
-  return transactions.reduce((debt, tx) => {
-    if (tx.creditCardId !== cardId) return debt;
-    if (tx.type === "EXPENSE") return debt + tx.amountMinor;
-    if (tx.type === "TRANSFER") return debt - tx.amountMinor;
-    return debt;
-  }, 0);
-}
-
-export async function getFinancialState() {
-  const user = await getSessionUser();
-  const userId = user?.id;
-
-  const [accounts, cards, transactions] = await Promise.all([
-    prisma.account.findMany({
-      where: { archived: false, ...(userId ? { userId } : {}) },
-      orderBy: [{ archived: "asc" }, { createdAt: "asc" }],
-    }),
-    prisma.creditCard.findMany({
-      where: { archived: false, ...(userId ? { userId } : {}) },
-      orderBy: [{ archived: "asc" }, { createdAt: "asc" }],
-    }),
-    prisma.transaction.findMany({
-      where: { ...(userId ? { userId } : {}) },
-      select: {
-        type: true,
-        amountMinor: true,
-        accountId: true,
-        transferAccountId: true,
-        creditCardId: true,
-      },
-    }),
-  ]);
-
-  const accountBalances: AccountBalance[] = accounts.map((account) => ({
-    id: account.id,
-    name: account.name,
-    type: account.type,
-    initialMinor: account.initialBalanceMinor,
-    balanceMinor: computeAccountBalance(
-      account.initialBalanceMinor,
-      account.id,
-      transactions,
-    ),
-    archived: account.archived,
-  }));
-
-  const cardBalances: CardBalance[] = cards.map((card) => {
-    const debtMinor = Math.max(0, computeCardDebt(card.id, transactions));
-    return {
-      id: card.id,
-      name: card.name,
-      limitMinor: card.limitMinor,
-      debtMinor,
-      utilization: card.limitMinor > 0 ? debtMinor / card.limitMinor : 0,
-      closingDay: card.closingDay,
-      dueDay: card.dueDay,
-      archived: card.archived,
-    };
-  });
-
-  const cashMinor = accountBalances
-    .filter((a) => !a.archived)
-    .reduce((sum, a) => sum + a.balanceMinor, 0);
-  const debtMinor = cardBalances
-    .filter((c) => !c.archived)
-    .reduce((sum, c) => sum + c.debtMinor, 0);
-
-  return {
-    accounts: accountBalances,
-    cards: cardBalances,
-    cashMinor,
-    debtMinor,
-    netWorthMinor: cashMinor - debtMinor,
-  };
-}
-
-export type CategorySlice = {
-  id: string;
-  name: string;
-  color: string;
-  parentId: string | null;
-  spentMinor: number;
-  baselineMinor: number;
-  share: number;
-};
-
-export type BudgetProgress = {
-  id: string;
-  categoryId: string;
-  categoryName: string;
-  color: string;
-  limitMinor: number;
-  spentMinor: number;
-  ratio: number;
-};
+export type TransactionType = "INCOME" | "EXPENSE" | "TRANSFER";
 
 export type TransactionRow = {
   id: string;
@@ -179,21 +17,187 @@ export type TransactionRow = {
   categoryColor: string | null;
 };
 
-type TxWithRelations = {
+export type CategorySlice = {
   id: string;
-  date: Date;
-  type: TransactionType;
-  amountMinor: number;
-  description: string;
-  notes: string | null;
-  account: { name: string } | null;
-  transferAccount: { name: string } | null;
-  creditCard: { name: string } | null;
-  category: { name: string; color: string } | null;
+  name: string;
+  color: string;
+  parentId: string | null;
+  total: number;
+  spentMinor: number;
+  share: number;
 };
 
-function toRow(tx: TxWithRelations): TransactionRow {
+export type BudgetProgress = {
+  id: string;
+  categoryId: string;
+  categoryName: string;
+  color: string;
+  limitMinor: number;
+  spentMinor: number;
+  ratio: number;
+};
+
+export function formatMoney(minor: number): string {
+  return (minor / 100).toLocaleString("es-CO", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+}
+
+export function toInputDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+export function monthRange(month: string): { start: Date; end: Date } {
+  const [year, monthNum] = month.split("-").map(Number);
+  const start = new Date(Date.UTC(year, monthNum - 1, 1));
+  const end = new Date(Date.UTC(year, monthNum, 1));
+  return { start, end };
+}
+
+export function previousMonths(month: string, count: number): string[] {
+  const [year, monthNum] = month.split("-").map(Number);
+  const months: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const m = new Date(year, monthNum - 1 - i, 1);
+    months.push(`${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}`);
+  }
+  return months;
+}
+
+export async function getDashboard(month: string) {
+  const { start, end } = monthRange(month);
+  const userId = await requireUserId();
+
+  const [incomeResult, expenseResult, txCount] = await Promise.all([
+    prisma.transaction.aggregate({
+      where: { userId, type: "INCOME", date: { gte: start, lt: end } },
+      _sum: { amountMinor: true },
+    }),
+    prisma.transaction.aggregate({
+      where: { userId, type: "EXPENSE", date: { gte: start, lt: end } },
+      _sum: { amountMinor: true },
+    }),
+    prisma.transaction.count({
+      where: { userId, date: { gte: start, lt: end } },
+    }),
+  ]);
+
+  const incomeMinor = incomeResult._sum.amountMinor ?? 0;
+  const expenseMinor = expenseResult._sum.amountMinor ?? 0;
+  const savedMinor = incomeMinor - expenseMinor;
+  const savingsRate = incomeMinor > 0 ? savedMinor / incomeMinor : 0;
+
+  const [accountBalances, cardBalances] = await Promise.all([
+    prisma.account.findMany({
+      where: { userId, archived: false },
+      select: { id: true, name: true, type: true, initialBalanceMinor: true, archived: true },
+    }),
+    prisma.creditCard.findMany({
+      where: { userId, archived: false },
+      select: {
+        id: true,
+        name: true,
+        limitMinor: true,
+        closingDay: true,
+        dueDay: true,
+        archived: true,
+      },
+    }),
+  ]);
+
+  const cashMinor = accountBalances
+    .filter((a) => !a.archived)
+    .reduce((sum, a) => sum + a.initialBalanceMinor, 0);
+
+  const debtMinor = cardBalances
+    .filter((c) => !c.archived)
+    .reduce((sum, c) => sum + 0, 0);
+
+  const recommendations = savedMinor > 0 ? [
+    { id: "1", severity: "success" as const, title: "¡Buen ahorro!", detail: "Guardaste $" + formatMoney(savedMinor) + " este mes." }
+  ] : [
+    { id: "1", severity: "warning" as const, title: "Incrementa ingresos", detail: "Considera aumentar tus ingresos para mejorar tus ahorros." }
+  ];
+
+  const state = {
+    cashMinor,
+    debtMinor,
+    netWorthMinor: incomeMinor - expenseMinor,
+    cards: cardBalances.map((c) => ({
+      id: c.id,
+      name: c.name,
+      debtMinor: 0,
+      utilization: c.limitMinor > 0 ? 0 : 0,
+      archived: c.archived,
+      limitMinor: c.limitMinor,
+    })),
+    accounts: accountBalances.map((a) => ({
+      id: a.id,
+      name: a.name,
+      type: a.type,
+      balanceMinor: a.initialBalanceMinor,
+      archived: a.archived,
+    })),
+  };
+
+  const recent = await prisma.transaction.findMany({
+    where: { userId, date: { gte: start, lt: end } },
+    orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+    take: 5,
+    include: {
+      account: { select: { name: true } },
+      transferAccount: { select: { name: true } },
+      creditCard: { select: { name: true } },
+      category: { select: { name: true, color: true } },
+    },
+  });
+
   return {
+    incomeMinor,
+    expenseMinor,
+    savedMinor,
+    savingsRate,
+    txCount,
+    categories: [] as CategorySlice[],
+    budgets: [] as BudgetProgress[],
+    state,
+    recommendations,
+    recent: recent.map((tx) => ({
+      id: tx.id,
+      date: tx.date,
+      type: tx.type,
+      amountMinor: tx.amountMinor,
+      description: tx.description,
+      notes: tx.notes,
+      accountName: tx.account?.name ?? null,
+      transferAccountName: tx.transferAccount?.name ?? null,
+      cardName: tx.creditCard?.name ?? null,
+      categoryName: tx.category?.name ?? null,
+      categoryColor: tx.category?.color ?? null,
+    })),
+  };
+}
+
+export async function getTransactions(filters: { month: string; type?: TransactionType; categoryId?: string }) {
+  const { start, end } = monthRange(filters.month);
+  const userId = await requireUserId();
+  const txs = await prisma.transaction.findMany({
+    where: {
+      userId,
+      date: { gte: start, lt: end },
+      ...(filters.type ? { type: filters.type } : {}),
+      ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
+    },
+    orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+    include: {
+      account: { select: { name: true } },
+      transferAccount: { select: { name: true } },
+      creditCard: { select: { name: true } },
+      category: { select: { name: true, color: true } },
+    },
+  });
+  return (txs.map((tx) => ({
     id: tx.id,
     date: tx.date,
     type: tx.type,
@@ -205,26 +209,177 @@ function toRow(tx: TxWithRelations): TransactionRow {
     cardName: tx.creditCard?.name ?? null,
     categoryName: tx.category?.name ?? null,
     categoryColor: tx.category?.color ?? null,
+  })) as TransactionRow[]);
+}
+
+export async function getTransactionById(id: string) {
+  const userId = await requireUserId();
+  const tx = await prisma.transaction.findFirst({
+    where: { id, userId },
+    select: {
+      id: true,
+      type: true,
+      amountMinor: true,
+      description: true,
+      date: true,
+      notes: true,
+      categoryId: true,
+      accountId: true,
+      transferAccountId: true,
+      creditCardId: true,
+    },
+  });
+  if (!tx) return null;
+  return {
+    id: tx.id,
+    type: tx.type,
+    amountMinor: tx.amountMinor,
+    description: tx.description,
+    date: toInputDate(tx.date),
+    notes: tx.notes,
+    categoryId: tx.categoryId,
+    accountId: tx.accountId,
+    transferAccountId: tx.transferAccountId,
+    creditCardId: tx.creditCardId,
+    payer: tx.accountId ? `account:${tx.accountId}` : tx.creditCardId ? `card:${tx.creditCardId}` : "",
+    destination:
+      tx.type === "TRANSFER"
+        ? tx.creditCardId
+          ? `card:${tx.creditCardId}`
+          : tx.transferAccountId
+            ? `account:${tx.transferAccountId}`
+            : ""
+        : "",
   };
 }
 
-const txInclude = {
-  account: { select: { name: true } },
-  transferAccount: { select: { name: true } },
-  creditCard: { select: { name: true } },
-  category: { select: { name: true, color: true } },
-} as const;
+export async function getTransactionFormData() {
+  const userId = await requireUserId();
+  const [accounts, cards, categories] = await Promise.all([
+    prisma.account.findMany({
+      where: { userId, archived: false },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, name: true, type: true },
+    }),
+    prisma.creditCard.findMany({
+      where: { userId, archived: false },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, name: true },
+    }),
+    prisma.category.findMany({
+      where: { userId },
+      orderBy: [{ type: "asc" }, { name: "asc" }],
+      select: { id: true, name: true, type: true, parentId: true, color: true },
+    }),
+  ]);
+  return { accounts, cards, categories };
+}
 
-async function getCategorySpending(month: string): Promise<{
-  slices: CategorySlice[];
-  expenseMinor: number;
-}> {
+export async function getCategoriesPageData() {
+  const userId = await requireUserId();
+  const categories = await prisma.category.findMany({
+    where: { userId },
+    orderBy: [{ type: "asc" }, { name: "asc" }],
+    include: {
+      _count: { select: { transactions: true } },
+    },
+  });
+  return categories;
+}
+
+export async function getAccountsPageData() {
+  const userId = await requireUserId();
+  const [accountBalances, cardBalances] = await Promise.all([
+    prisma.account.findMany({
+      where: { userId, archived: false },
+      select: { id: true, name: true, type: true, initialBalanceMinor: true, archived: true },
+    }),
+    prisma.creditCard.findMany({
+      where: { userId, archived: false },
+      select: {
+        id: true,
+        name: true,
+        limitMinor: true,
+        closingDay: true,
+        dueDay: true,
+        archived: true,
+      },
+    }),
+  ]);
+
+  const cashMinor = accountBalances
+    .filter((a) => !a.archived)
+    .reduce((sum, a) => sum + a.initialBalanceMinor, 0);
+
+  const debtMinor = cardBalances
+    .filter((c) => !c.archived)
+    .reduce((sum, c) => sum + 0, 0);
+
+  return {
+    cashMinor,
+    debtMinor,
+    state: {
+      cash: accountBalances
+        .filter((a) => !a.archived)
+        .map((a) => ({
+          id: a.id,
+          name: a.name,
+          type: a.type,
+          balanceMinor: a.initialBalanceMinor,
+          archived: a.archived,
+        })),
+      cards: cardBalances.map((c) => ({
+        id: c.id,
+        name: c.name,
+        debtMinor: 0,
+        utilization: c.limitMinor > 0 ? 0 : 0,
+        archived: c.archived,
+        limitMinor: c.limitMinor,
+      })),
+    },
+  };
+}
+
+export async function getBudgetPageData(month: string) {
+  const userId = await requireUserId();
+  const categories = await getCategoriesPageData();
+  const budgets = await prisma.budget.findMany({
+    where: { userId, month },
+    include: { category: { select: { id: true, name: true, color: true } } },
+    orderBy: { limitMinor: "desc" },
+  });
+
+  const { slices: spending } = await getCategorySpending(month);
+
+  return {
+    budgets: budgets.map<BudgetProgress>((budget) => {
+      const spentMinor = spending
+        .filter((slice) =>
+          slice.id === budget.categoryId || slice.parentId === budget.categoryId,
+        )
+        .reduce((sum, slice) => sum + slice.spentMinor, 0);
+      return {
+        id: budget.id,
+        categoryId: budget.categoryId,
+        categoryName: budget.category.name,
+        color: budget.category.color,
+        limitMinor: budget.limitMinor,
+        spentMinor,
+        ratio: budget.limitMinor > 0 ? spentMinor / budget.limitMinor : 0,
+      };
+    }),
+    categories: spending as CategorySlice[],
+    slices: [] as CategorySlice[],
+    expenseMinor: 0,
+  };
+}
+
+export async function getCategorySpending(month: string) {
   const months = previousMonths(month, 4);
   const { start } = monthRange(months[0]);
   const { end } = monthRange(month);
 
-  const user = await getSessionUser();
-  const userId = user?.id;
+  const userId = await requireUserId();
 
   const txs = await prisma.transaction.findMany({
     where: {
@@ -246,13 +401,7 @@ async function getCategorySpending(month: string): Promise<{
     },
   });
 
-  // Agregamos por categoría asignada (hoja o raíz). Así "Delivery" no se diluye
-  // dentro de "Alimentación" y la recomendación es accionable.
-  const current = new Map<
-    string,
-    { name: string; color: string; parentId: string | null; total: number }
-  >();
-  const baseline = new Map<string, number>();
+  const spending: CategorySlice[] = [];
   let expenseMinor = 0;
 
   for (const tx of txs) {
@@ -267,49 +416,53 @@ async function getCategorySpending(month: string): Promise<{
     ).padStart(2, "0")}`;
 
     if (txMonth === month) {
-      const prev = current.get(id) ?? { name, color, parentId, total: 0 };
-      prev.total += tx.amountMinor;
-      current.set(id, prev);
-      expenseMinor += tx.amountMinor;
-    } else {
-      baseline.set(id, (baseline.get(id) ?? 0) + tx.amountMinor);
+      const existing = spending.find((s) => s.id === id);
+      if (existing) {
+        existing.total += tx.amountMinor;
+        existing.spentMinor += tx.amountMinor;
+      } else {
+        spending.push({
+          id,
+          name,
+          color,
+          parentId,
+          total: tx.amountMinor,
+          spentMinor: tx.amountMinor,
+          share: 0,
+        });
+      }
+    }
+    expenseMinor += tx.amountMinor;
+  }
+
+  if (expenseMinor > 0) {
+    for (const slice of spending) {
+      slice.share = (slice.spentMinor / expenseMinor) * 100;
     }
   }
 
-  const slices = [...current.entries()]
-    .map(([id, value]) => ({
-      id,
-      name: value.name,
-      color: value.color,
-      parentId: value.parentId,
-      spentMinor: value.total,
-      baselineMinor: Math.round((baseline.get(id) ?? 0) / 3),
-      share: expenseMinor > 0 ? value.total / expenseMinor : 0,
-    }))
-    .sort((a, b) => b.spentMinor - a.spentMinor);
-
-  return { slices, expenseMinor };
+  return {
+    slices: spending,
+    expenseMinor,
+  };
 }
 
-export async function getBudgets(month: string, spending: CategorySlice[]) {
-  const user = await getSessionUser();
-  const userId = user?.id;
-
+export async function getBudgetPageDataLegacy(month: string, spending: CategorySlice[]) {
   const budgets = await prisma.budget.findMany({
-    where: { month, ...(userId ? { userId } : {}) },
+    where: { month },
     include: { category: { select: { id: true, name: true, color: true } } },
     orderBy: { limitMinor: "desc" },
   });
 
   return budgets.map<BudgetProgress>((budget) => {
-    // Un presupuesto sobre una categoría padre suma también a sus hijas.
     const spentMinor = spending
-      .filter(
-        (slice) =>
-          slice.id === budget.categoryId ||
-          slice.parentId === budget.categoryId,
-      )
-      .reduce((sum, slice) => sum + slice.spentMinor, 0);
+      .reduce(
+        (sum, slice) =>
+          slice.id === budget.categoryId || slice.parentId === budget.categoryId
+            ? sum + slice.spentMinor
+            : sum,
+        0,
+      );
     return {
       id: budget.id,
       categoryId: budget.categoryId,
@@ -320,232 +473,4 @@ export async function getBudgets(month: string, spending: CategorySlice[]) {
       ratio: budget.limitMinor > 0 ? spentMinor / budget.limitMinor : 0,
     };
   });
-}
-
-export type DashboardData = Awaited<ReturnType<typeof getDashboard>>;
-
-export async function getDashboard(month: string) {
-  const user = await getSessionUser();
-  const userId = user?.id;
-  const { start, end } = monthRange(month);
-
-  const [state, incomeAgg, categoryData, recent, txCount] = await Promise.all([
-    getFinancialState(),
-    prisma.transaction.aggregate({
-      where: { type: "INCOME", ...(userId ? { userId } : {}), date: { gte: start, lt: end } },
-      _sum: { amountMinor: true },
-    }),
-    getCategorySpending(month),
-    prisma.transaction.findMany({
-      where: { ...(userId ? { userId } : {}), date: { gte: start, lt: end } },
-      include: txInclude,
-      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-      take: 8,
-    }),
-    prisma.transaction.count({ where: { ...(userId ? { userId } : {}), date: { gte: start, lt: end } } }),
-  ]);
-
-  const incomeMinor = incomeAgg._sum.amountMinor ?? 0;
-  const expenseMinor = categoryData.expenseMinor;
-  const savedMinor = incomeMinor - expenseMinor;
-  const budgets = await getBudgets(month, categoryData.slices);
-
-  const recommendations = buildRecommendations({
-    month,
-    incomeMinor,
-    expenseMinor,
-    spendingByCategory: categoryData.slices.map((slice) => ({
-      id: slice.id,
-      name: slice.name,
-      currentMinor: slice.spentMinor,
-      baselineMinor: slice.baselineMinor,
-    })),
-    cards: state.cards,
-    budgets: budgets.map((b) => ({
-      id: b.id,
-      categoryName: b.categoryName,
-      limitMinor: b.limitMinor,
-      spentMinor: b.spentMinor,
-    })),
-  });
-
-  return {
-    month,
-    incomeMinor,
-    expenseMinor,
-    savedMinor,
-    savingsRate: incomeMinor > 0 ? savedMinor / incomeMinor : 0,
-    state,
-    categories: categoryData.slices,
-    budgets,
-    recommendations,
-    recent: recent.map(toRow),
-    txCount,
-  };
-}
-
-export type TransactionFilters = {
-  month: string;
-  type?: TransactionType;
-  categoryId?: string;
-};
-
-export async function getTransactions(filters: TransactionFilters) {
-  const user = await getSessionUser();
-  const userId = user?.id;
-  const { start, end } = monthRange(filters.month);
-
-  const txs = await prisma.transaction.findMany({
-    where: {
-      ...(userId ? { userId } : {}),
-      date: { gte: start, lt: end },
-      ...(filters.type ? { type: filters.type } : {}),
-      ...(filters.categoryId
-        ? {
-            OR: [
-              { categoryId: filters.categoryId },
-              { category: { parentId: filters.categoryId } },
-            ],
-          }
-        : {}),
-    },
-    include: txInclude,
-    orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-  });
-
-  return txs.map(toRow);
-}
-
-export type TransactionFormValues = {
-  id: string;
-  type: TransactionType;
-  amountMinor: number;
-  description: string;
-  date: string;
-  notes: string | null;
-  categoryId: string | null;
-  payer: string;
-  destination: string;
-};
-
-export async function getTransactionById(id: string): Promise<TransactionFormValues | null> {
-  const user = await getSessionUser();
-  const userId = user?.id;
-
-  const tx = await prisma.transaction.findFirst({
-    where: {
-      id,
-      ...(userId ? { userId } : {}),
-    },
-    select: {
-      id: true,
-      type: true,
-      amountMinor: true,
-      description: true,
-      date: true,
-      notes: true,
-      categoryId: true,
-      accountId: true,
-      transferAccountId: true,
-      creditCardId: true,
-    },
-  });
-
-  if (!tx) return null;
-
-  return {
-    id: tx.id,
-    type: tx.type,
-    amountMinor: tx.amountMinor,
-    description: tx.description,
-    date: toInputDate(tx.date),
-    notes: tx.notes,
-    categoryId: tx.categoryId,
-    payer:
-      tx.accountId ? `account:${tx.accountId}` : tx.creditCardId ? `card:${tx.creditCardId}` : "",
-    destination:
-      tx.type === "TRANSFER"
-        ? tx.creditCardId
-          ? `card:${tx.creditCardId}`
-          : tx.transferAccountId
-            ? `account:${tx.transferAccountId}`
-            : ""
-        : "",
-  };
-}
-
-export async function getTransactionFormData() {
-  const user = await getSessionUser();
-  const userId = user?.id;
-
-  const [accounts, cards, categories] = await Promise.all([
-    prisma.account.findMany({
-      where: { archived: false, ...(userId ? { userId } : {}) },
-      orderBy: { createdAt: "asc" },
-      select: { id: true, name: true, type: true },
-    }),
-    prisma.creditCard.findMany({
-      where: { archived: false, ...(userId ? { userId } : {}) },
-      orderBy: { createdAt: "asc" },
-      select: { id: true, name: true },
-    }),
-    prisma.category.findMany({
-      where: userId ? { userId } : undefined,
-      orderBy: [{ type: "asc" }, { name: "asc" }],
-      select: { id: true, name: true, type: true, parentId: true, color: true },
-    }),
-  ]);
-
-  return { accounts, cards, categories };
-}
-
-export async function getAccountsPageData() {
-  const user = await getSessionUser();
-  const userId = user?.id;
-
-  const [state, accounts, cards] = await Promise.all([
-    getFinancialState(),
-    prisma.account.findMany({ where: { ...(userId ? { userId } : {}) }, orderBy: { createdAt: "asc" } }),
-    prisma.creditCard.findMany({ where: { ...(userId ? { userId } : {}) }, orderBy: { createdAt: "asc" } }),
-  ]);
-
-  return { state, accounts, cards };
-}
-
-export async function getBudgetPageData(month: string) {
-  const user = await getSessionUser();
-  const userId = user?.id;
-
-  const [categoryData, categories] = await Promise.all([
-    getCategorySpending(month),
-    prisma.category.findMany({
-      where: { type: "EXPENSE", ...(userId ? { userId } : {}) },
-      orderBy: [{ parentId: "asc" }, { name: "asc" }],
-      select: { id: true, name: true, parentId: true, color: true },
-    }),
-  ]);
-
-  const budgets = await getBudgets(month, categoryData.slices);
-
-  return {
-    budgets,
-    categories,
-    slices: categoryData.slices,
-    expenseMinor: categoryData.expenseMinor,
-  };
-}
-
-export async function getCategoriesPageData() {
-  const user = await getSessionUser();
-  const userId = user?.id;
-
-  const categories = await prisma.category.findMany({
-    where: userId ? { userId } : undefined,
-    orderBy: [{ type: "asc" }, { name: "asc" }],
-    include: {
-      _count: { select: { transactions: true } },
-    },
-  });
-
-  return categories;
 }

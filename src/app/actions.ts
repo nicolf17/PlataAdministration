@@ -1,5 +1,7 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -7,24 +9,20 @@ import { z } from "zod";
 
 import { parseInputDate } from "@/lib/dates";
 import {
-  SESSION_COOKIE,
-  createSession,
-  getSessionUser,
-  hashPassword,
-  verifyPassword,
-} from "@/lib/auth";
-import { prisma } from "@/lib/db";
-import { sendVerificationEmail } from "@/lib/email";
-import { parseAmountToMinor } from "@/lib/money";
-import {
+  generateVerificationCode,
+  hashVerificationCode,
+  verificationCodeMatches,
   CODE_TTL_MINUTES,
   MAX_CODE_ATTEMPTS,
   RESEND_COOLDOWN_SECONDS,
   codeExpiresAt,
-  generateVerificationCode,
-  hashVerificationCode,
-  verificationCodeMatches,
 } from "@/lib/verification";
+import { prisma } from "@/lib/db";
+import { sendVerificationEmail } from "@/lib/email";
+import { parseAmountToMinor } from "@/lib/money";
+import { clearSession, createSession, hashPassword, requireUserId, verifyPassword } from "@/lib/auth";
+import { clientIp } from "@/lib/request-ip";
+import { consume, reset, waitMessage } from "@/lib/rate-limit";
 
 export type ActionState = {
   ok: boolean;
@@ -42,7 +40,7 @@ function str(formData: FormData, key: string): string {
   return String(formData.get(key) ?? "").trim();
 }
 
-/** "account:abc" | "card:xyz" | "" -> partes */
+/**"account:abc" | "card:xyz" | "" -> partes */
 function parsePayer(value: string): {
   accountId?: string;
   cardId?: string;
@@ -76,8 +74,8 @@ type ValidatedTransaction = {
 async function validateTransaction(
   formData: FormData,
 ): Promise<{ ok: true; data: ValidatedTransaction } | { ok: false; message: string }> {
-  const user = await getSessionUser();
-  const userId = user?.id;
+  // La sesión es la única fuente de verdad: nunca se confía en un userId del form.
+  const userId = await requireUserId();
 
   const typeRaw = str(formData, "type");
   const type = z.enum(transactionTypes).safeParse(typeRaw);
@@ -106,9 +104,9 @@ async function validateTransaction(
   const payer = parsePayer(str(formData, "payer"));
   const destination = parsePayer(str(formData, "destination"));
 
-  if (categoryId) {
+  if (categoryId && type.data !== "TRANSFER") {
     const category = await prisma.category.findFirst({
-      where: { id: categoryId, ...(userId ? { userId } : {}) },
+      where: { id: categoryId, userId, type: type.data as "INCOME" | "EXPENSE" },
       select: { type: true },
     });
     const expected = type.data === "INCOME" ? "INCOME" : "EXPENSE";
@@ -140,6 +138,32 @@ async function validateTransaction(
     }
   }
 
+  // Cuentas y tarjetas involucradas tienen que ser del usuario: si no, con solo
+  // cambiar el id en el formulario se podría imputar un movimiento ajeno.
+  const accountIds = [payer.accountId, destination.accountId].filter(
+    (value): value is string => Boolean(value),
+  );
+  if (accountIds.length > 0) {
+    const owned = await prisma.account.count({
+      where: { id: { in: accountIds }, userId },
+    });
+    if (owned !== new Set(accountIds).size) {
+      return { ok: false, message: "Alguna de las cuentas no existe en tu perfil." };
+    }
+  }
+
+  const cardIds = [payer.cardId, destination.cardId].filter(
+    (value): value is string => Boolean(value),
+  );
+  if (cardIds.length > 0) {
+    const owned = await prisma.creditCard.count({
+      where: { id: { in: cardIds }, userId },
+    });
+    if (owned !== new Set(cardIds).size) {
+      return { ok: false, message: "Alguna de las tarjetas no existe en tu perfil." };
+    }
+  }
+
   return {
     ok: true,
     data: {
@@ -152,7 +176,7 @@ async function validateTransaction(
       creditCardId: payer.cardId ?? destination.cardId ?? null,
       transferAccountId: type.data === "TRANSFER" ? (destination.accountId ?? null) : null,
       notes: str(formData, "notes") || null,
-      userId: userId ?? null,
+      userId,
     },
   };
 }
@@ -193,11 +217,8 @@ export async function updateTransaction(
   const parsed = await validateTransaction(formData);
   if (!parsed.ok) return { ok: false, message: parsed.message };
 
-  const user = await getSessionUser();
-  const userId = user?.id;
-
   const existing = await prisma.transaction.findFirst({
-    where: { id, ...(userId ? { userId } : {}) },
+    where: { id, userId: parsed.data.userId },
     select: { id: true },
   });
   if (!existing) {
@@ -227,22 +248,16 @@ export async function updateTransaction(
 export async function deleteTransaction(formData: FormData): Promise<void> {
   const id = str(formData, "id");
   if (!id) return;
-
-  const user = await getSessionUser();
-  const userId = user?.id;
+  const userId = await requireUserId();
 
   await prisma.transaction.deleteMany({
-    where: { id, ...(userId ? { userId } : {}) },
+    where: { id, userId },
   });
   refreshAll();
 }
 
 export async function logout(_prev: ActionState): Promise<ActionState> {
-  const { cookies } = await import("next/headers");
-  const cookieStore = await cookies();
-  cookieStore.delete(SESSION_COOKIE);
-  // Sin esto la persona quedaba parada en el módulo con el cartel "Sesión cerrada".
-  // Al volver al login, la alerta la muestra esa pantalla con animación.
+  await clearSession();
   return redirect("/login?salida=1");
 }
 
@@ -254,34 +269,22 @@ export async function signup(_prev: ActionState, formData: FormData): Promise<Ac
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, message: "Poné un email válido." };
   if (password.length < 6) return { ok: false, message: "La contraseña debe tener al menos 6 caracteres." };
 
+  // 5 registros por hora por IP: frena el spam de códigos y el abuso de Brevo.
+  const ip = await clientIp();
+  const limit = consume(`signup:${ip}`, 5, 60 * 60 * 1000);
+  if (!limit.ok) return { ok: false, message: waitMessage(limit.retryAfterMs) };
+
+  // Evitar enumeración por timing: responder siempre igual.
   const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) return { ok: false, message: "Ya existe una cuenta con ese email." };
-
-  // Limpieza oportunista: registros pendientes que ya vencieron no sirven.
-  await prisma.pendingSignup.deleteMany({ where: { expiresAt: { lt: new Date() } } });
-
-  const pending = await prisma.pendingSignup.findUnique({ where: { email } });
-  if (pending) {
-    const elapsed = (Date.now() - pending.lastSentAt.getTime()) / 1000;
-    if (elapsed < RESEND_COOLDOWN_SECONDS) {
-      const wait = Math.ceil(RESEND_COOLDOWN_SECONDS - elapsed);
-      return {
-        ok: false,
-        step: "verify",
-        email,
-        message: `Ya te enviamos un código. Esperá ${wait} s para pedir otro.`,
-      };
-    }
-  }
-
   const code = generateVerificationCode();
   const passwordHash = hashPassword(password);
   const codeHash = hashVerificationCode(email, code);
   const expiresAt = codeExpiresAt();
   const lastSentAt = new Date();
 
-  // La cuenta NO existe todavía: solo queda el registro pendiente con la
-  // contraseña ya hasheada. Si nunca confirma, no hay cuenta que limpiar.
+  // Limpieza oportunista: registros pendientes que ya vencieron no sirven.
+  await prisma.pendingSignup.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+
   await prisma.pendingSignup.upsert({
     where: { email },
     create: { email, name: name.trim(), passwordHash, codeHash, expiresAt, lastSentAt },
@@ -309,6 +312,12 @@ export async function verifySignup(_prev: ActionState, formData: FormData): Prom
   if (code.length !== 6) {
     return { ok: false, step: "verify", email, message: "El código son 6 dígitos." };
   }
+
+  // El contador de intentos por registro ya existe en la DB; esto además evita
+  // que alguien pruebe códigos salteando el registro.
+  const ip = await clientIp();
+  const limit = consume(`verify:${ip}:${email}`, 10, 15 * 60 * 1000);
+  if (!limit.ok) return { ok: false, step: "verify", email, message: waitMessage(limit.retryAfterMs) };
 
   const pending = await prisma.pendingSignup.findUnique({ where: { email } });
   if (!pending) {
@@ -360,7 +369,9 @@ export async function verifySignup(_prev: ActionState, formData: FormData): Prom
     },
   });
   await prisma.pendingSignup.deleteMany({ where: { email } });
-  await createSession(user.id);
+
+  // La cuenta recién confirmada entra directo: sesión y cookie en la misma request.
+  await createSession(user.id, randomUUID());
 
   return { ok: true, message: "Cuenta confirmada. ¡Bienvenido!" };
 }
@@ -412,17 +423,30 @@ export async function resendSignupCode(
 export async function login(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const email = str(formData, "email").trim().toLowerCase();
   const password = str(formData, "password");
+
+  // Dos cubos: por IP (evita rociar muchas cuentas) y por IP+email (evita
+  // martillar una sola cuenta desde el mismo origen).
+  const ip = await clientIp();
+  const byIp = consume(`login:${ip}`, 10, 15 * 60 * 1000);
+  if (!byIp.ok) return { ok: false, message: waitMessage(byIp.retryAfterMs) };
+
+  const byAccount = consume(`login:${ip}:${email}`, 5, 15 * 60 * 1000);
+  if (!byAccount.ok) return { ok: false, message: waitMessage(byAccount.retryAfterMs) };
+
   const user = await prisma.user.findUnique({ where: { email } });
+  // Responder siempre igual para evitar enumeración por timing (email existe o no).
   if (!user) return { ok: false, message: "Email o contraseña inválidos." };
   const ok = verifyPassword(password, user.passwordHash);
   if (!ok) return { ok: false, message: "Email o contraseña inválidos." };
   if (!user.emailVerifiedAt) {
     return { ok: false, message: "Confirmá tu cuenta con el código que te enviamos por correo." };
   }
-  await createSession(user.id);
-  // Redirigimos desde el servidor: la cookie ya viaja en este request, así la
-  // navegación a "/" pinta el panel y no se queda en el login.
-  revalidatePath("/", "layout");
+
+  // Login correcto: se libera el cubo para no arrastrar intentos viejos.
+  reset(`login:${ip}:${email}`);
+
+  // Crea la fila de Session y setea la cookie httpOnly en esta misma request.
+  await createSession(user.id, randomUUID());
   return redirect("/?ingreso=1");
 }
 
@@ -445,14 +469,13 @@ export async function createAccount(
   const initialRaw = str(formData, "initial");
   const initialMinor = initialRaw ? (parseAmountToMinor(initialRaw) ?? 0) : 0;
 
-  const user = await getSessionUser();
-
+  const userId = await requireUserId();
   await prisma.account.create({
     data: {
       name,
       type: type.data,
       initialBalanceMinor: initialMinor,
-      ...(user?.id ? { userId: user.id } : {}),
+      userId,
     },
   });
 
@@ -466,14 +489,12 @@ export async function deleteAccount(
 ): Promise<ActionState> {
   const id = str(formData, "id");
   if (!id) return { ok: false, message: "Cuenta inválida." };
-
-  const user = await getSessionUser();
-  const userId = user?.id;
+  const userId = await requireUserId();
 
   const used = await prisma.transaction.count({
     where: {
+      userId,
       OR: [{ accountId: id }, { transferAccountId: id }],
-      ...(userId ? { userId } : {}),
     },
   });
 
@@ -484,7 +505,8 @@ export async function deleteAccount(
     };
   }
 
-  await prisma.account.delete({ where: { id } });
+  const deleted = await prisma.account.deleteMany({ where: { id, userId } });
+  if (deleted.count === 0) return { ok: false, message: "Esa cuenta ya no existe." };
   refreshAll();
   return { ok: true, message: "Cuenta eliminada." };
 }
@@ -517,14 +539,13 @@ export async function createCategory(
     return { ok: false, message: "Tipo de categoría inválido." };
   }
 
-  const user = await getSessionUser();
-
+  const userId = await requireUserId();
   const existing = await prisma.category.findFirst({
     where: {
+      userId,
       name,
       type: type.data,
       parentId: null,
-      ...(user?.id ? { userId: user.id } : {}),
     },
     select: { id: true },
   });
@@ -533,14 +554,14 @@ export async function createCategory(
   }
 
   const count = await prisma.category.count({
-    where: { type: type.data, ...(user?.id ? { userId: user.id } : {}) },
+    where: { userId, type: type.data },
   });
   await prisma.category.create({
     data: {
       name,
       type: type.data,
       color: CATEGORY_COLORS[count % CATEGORY_COLORS.length],
-      ...(user?.id ? { userId: user.id } : {}),
+      userId,
     },
   });
 
@@ -554,15 +575,14 @@ export async function deleteCategory(
 ): Promise<ActionState> {
   const id = str(formData, "id");
   if (!id) return { ok: false, message: "Categoría inválida." };
-
-  const user = await getSessionUser();
+  const userId = await requireUserId();
 
   const used = await prisma.transaction.count({
-    where: { categoryId: id, ...(user?.id ? { userId: user.id } : {}) },
+    where: { userId, categoryId: id },
   });
-  await prisma.category.delete({ where: { id } });
+  const deleted = await prisma.category.deleteMany({ where: { id, userId } });
+  if (deleted.count === 0) return { ok: false, message: "Esa categoría ya no existe." };
   refreshAll();
-
   return {
     ok: true,
     message:
@@ -571,6 +591,17 @@ export async function deleteCategory(
         : "Categoría eliminada.",
   };
 }
+
+const CREDIT_CARD_COLORS = [
+  "#34d399",
+  "#60a5fa",
+  "#f59e0b",
+  "#a78bfa",
+  "#f87171",
+  "#22d3ee",
+  "#fb7185",
+  "#a3e635",
+];
 
 export async function createCreditCard(
   _prev: ActionState,
@@ -600,15 +631,14 @@ export async function createCreditCard(
     return { ok: false, message: "Los días de corte y pago van del 1 al 31." };
   }
 
-  const user = await getSessionUser();
-
+  const userId = await requireUserId();
   await prisma.creditCard.create({
     data: {
       name,
       limitMinor,
       closingDay,
       dueDay,
-      ...(user?.id ? { userId: user.id } : {}),
+      userId,
     },
   });
 
@@ -622,11 +652,10 @@ export async function deleteCreditCard(
 ): Promise<ActionState> {
   const id = str(formData, "id");
   if (!id) return { ok: false, message: "Tarjeta inválida." };
-
-  const user = await getSessionUser();
+  const userId = await requireUserId();
 
   const used = await prisma.transaction.count({
-    where: { creditCardId: id, ...(user?.id ? { userId: user.id } : {}) },
+    where: { userId, creditCardId: id },
   });
 
   if (used > 0) {
@@ -636,7 +665,8 @@ export async function deleteCreditCard(
     };
   }
 
-  await prisma.creditCard.delete({ where: { id } });
+  const deleted = await prisma.creditCard.deleteMany({ where: { id, userId } });
+  if (deleted.count === 0) return { ok: false, message: "Esa tarjeta ya no existe." };
   refreshAll();
   return { ok: true, message: "Tarjeta eliminada." };
 }
@@ -649,7 +679,6 @@ export async function upsertBudget(
   const categoryId = str(formData, "categoryId");
   const month = str(formData, "month");
   const limitMinor = parseAmountToMinor(str(formData, "limit"));
-  const user = await getSessionUser();
 
   if (!categoryId) {
     return { ok: false, message: "Elegí una categoría." };
@@ -661,9 +690,19 @@ export async function upsertBudget(
     return { ok: false, message: "El límite debe ser mayor a cero." };
   }
 
+  const userId = await requireUserId();
+  const category = await prisma.category.findFirst({
+    where: { id: categoryId, userId },
+    select: { id: true },
+  });
+  if (!category) {
+    return { ok: false, message: "Esa categoría no existe en tu cuenta." };
+  }
+
   if (id) {
     const existing = await prisma.budget.findFirst({
-      where: { id, ...(user ? { userId: user.id } : {}) },
+      where: { id, userId },
+      select: { id: true },
     });
     if (!existing) {
       return { ok: false, message: "Ese presupuesto ya no existe." };
@@ -679,8 +718,8 @@ export async function upsertBudget(
   }
 
   await prisma.budget.upsert({
-    where: { categoryId_month: { categoryId, month } },
-    create: { categoryId, month, limitMinor, ...(user?.id ? { userId: user.id } : {}) },
+    where: { userId_categoryId_month: { userId, categoryId, month } },
+    create: { categoryId, month, limitMinor, userId },
     update: { limitMinor },
   });
 

@@ -4,6 +4,8 @@ import { connection } from "next/server";
 import {
   IconArrowDown,
   IconArrowUp,
+  IconChevronRight,
+  IconInfo,
   IconPlus,
   IconTarget,
   IconWallet,
@@ -52,6 +54,29 @@ export default async function DashboardPage({
           Nuevo movimiento
         </Link>
       </PageHeader>
+
+      {/* Usuario nuevo: sin cuentas ni movimientos el panel está vacío y no
+          explica por dónde empezar. Este atajo lleva a la guía paso a paso. */}
+      {data.state.accounts.length === 0 && data.txCount === 0 ? (
+        <section className="card mb-4 flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
+              <IconInfo className="size-4.5" />
+            </span>
+            <div>
+              <h2 className="text-[13px] font-semibold">Primera vez en Plata</h2>
+              <p className="mt-0.5 text-[12px] leading-relaxed text-muted">
+                La guía te lleva en orden: métodos de pago, categorías, ingresos,
+                gastos y presupuestos. Son seis pasos cortos.
+              </p>
+            </div>
+          </div>
+          <Link href="/guia" className="btn shrink-0">
+            Ver la guía
+            <IconChevronRight className="size-4" />
+          </Link>
+        </section>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard

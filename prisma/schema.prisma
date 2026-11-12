@@ -53,16 +53,15 @@ model User {
 }
 
 model Session {
-  id         String   @id @default(cuid())
-  tokenHash String
-  userId     String
+  id     String   @id @default(cuid())
+  sid    String   @unique
+  userId String
   createdAt DateTime @default(now())
   expiresAt DateTime
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([expiresAt])
 
-  @@index([userId])
-  @@unique([tokenHash])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // Registro pendiente: existe solo entre "pedí el código" y "confirmé el código".
@@ -107,7 +106,7 @@ model Account {
   transactions  Transaction[] @relation("AccountSource")
   transfersIn   Transaction[] @relation("AccountDestination")
 
-  @@index([archived])
+  @@index([userId, archived])
 }
 
 model CreditCard {
@@ -124,7 +123,7 @@ model CreditCard {
 
   transactions Transaction[]
 
-  @@index([archived])
+  @@index([userId, archived])
 }
 
 model Category {
@@ -144,7 +143,8 @@ model Category {
   transactions Transaction[]
   budgets      Budget[]
 
-  @@unique([name, type, parentId])
+  @@unique([userId, name, type, parentId])
+  @@index([userId, type])
   @@index([parentId])
 }
 
@@ -174,7 +174,7 @@ model Transaction {
   creditCard      CreditCard? @relation(fields: [creditCardId], references: [id], onDelete: Restrict)
   category        Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
-  @@index([date])
+  @@index([userId, date])
   @@index([categoryId])
   @@index([accountId])
   @@index([creditCardId])
@@ -190,6 +190,6 @@ model Budget {
   category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([categoryId, month])
+  @@unique([userId, categoryId, month])
   @@index([month])
 }

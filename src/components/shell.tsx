@@ -1,6 +1,7 @@
 ﻿import Link from "next/link";
 
 import { getSessionUser } from "@/lib/auth";
+import { IconInfo } from "@/components/icons";
 import { NavLinks } from "@/components/nav-links";
 import { NewMovementButton } from "@/components/new-movement-button";
 import { UserMenu } from "@/components/user-menu";
@@ -12,11 +13,21 @@ export async function Shell({ children }: { children: React.ReactNode }) {
   // mostrar navegación ni un botón para cerrar una sesión que no existe.
   if (!user) {
     return (
-      <main className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-3 pt-3 sm:px-4 sm:pt-5 md:px-8 md:pt-10">
-        <div className="flex-1">{children}</div>
-        <p className="pb-4 pt-8 text-[11px] tracking-wide text-muted/70">
-          by Nicolás López Forero
-        </p>
+      <main className="auth-bg relative flex min-h-dvh w-full flex-col overflow-hidden">
+        {/* Fondo animado: orbes que flotan y una grilla en perspectiva. Puro CSS,
+            sin blur sobre el contenido ni imágenes que cargar. */}
+        <div aria-hidden className="auth-orb auth-orb-a" />
+        <div aria-hidden className="auth-orb auth-orb-b" />
+        <div aria-hidden className="auth-orb auth-orb-c" />
+        <div aria-hidden className="auth-aurora" />
+        <div aria-hidden className="auth-grid" />
+
+        <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col px-3 pt-3 sm:px-4 sm:pt-5 md:px-8 md:pt-10">
+          <div className="flex-1">{children}</div>
+          <p className="pb-5 pt-8 text-center text-[11px] tracking-wide text-muted/70">
+            by Nicolás López Forero
+          </p>
+        </div>
       </main>
     );
   }
@@ -34,13 +45,21 @@ export async function Shell({ children }: { children: React.ReactNode }) {
         <NavLinks />
 
         <div className="mt-auto rounded-xl border border-line bg-surface/60 p-3">
-          <div className="mb-3">
+          <Link
+            href="/guia"
+            className="mb-3 flex items-center gap-2 rounded-lg px-1 py-1 text-[12px] font-medium text-muted transition-colors hover:text-foreground"
+          >
+            <IconInfo className="size-4" />
+            Guía de uso
+          </Link>
+          <div className="mb-2">
             <p className="truncate text-[12px] font-semibold">{user.name}</p>
             <p className="truncate text-[11px] text-muted">{user.email}</p>
           </div>
-          <p className="text-[11px] leading-relaxed text-muted">
+          <p className="mb-3 text-[11px] leading-relaxed text-muted">
             Tus datos en un servidor privado propio, en SQLite.
           </p>
+          <UserMenu variant="full" />
         </div>
 
         <p className="mt-3 px-1 text-[11px] tracking-wide text-muted/70">
@@ -60,6 +79,14 @@ export async function Shell({ children }: { children: React.ReactNode }) {
         </Link>
 
         <div className="flex items-center gap-2">
+          <Link
+            href="/guia"
+            aria-label="Guía de uso"
+            title="Guía de uso"
+            className="grid size-9 place-items-center rounded-md border border-[#243447] bg-[#0d141d] text-foreground/75 transition-colors hover:border-[#2f4358] hover:bg-surface-2 hover:text-foreground"
+          >
+            <IconInfo className="size-4" />
+          </Link>
           <NewMovementButton />
           <UserMenu name={user.name} />
         </div>

@@ -15,9 +15,9 @@ export const instant = false;
 
 export default async function AccountsPage() {
   await connection();
-  const { state } = await getAccountsPageData();
+  const { cashMinor, debtMinor, state } = await getAccountsPageData();
 
-  const activeAccounts = state.accounts.filter((a) => !a.archived);
+  const activeCash = state.cash.filter((c) => true); // All cash is active since we don't archive accounts in this simplified version
   const activeCards = state.cards.filter((c) => !c.archived);
 
   return (
@@ -34,10 +34,10 @@ export default async function AccountsPage() {
           </p>
           <p
             className={`mt-1 text-[26px] font-semibold tabular-nums tracking-tight ${
-              state.netWorthMinor < 0 ? "text-danger" : "text-foreground"
+              debtMinor < 0 ? "text-danger" : "text-foreground"}
             }`}
           >
-            {formatMoney(state.netWorthMinor)}
+            {formatMoney(cashMinor - debtMinor)}
           </p>
         </div>
         <div className="grid grid-cols-2 divide-x divide-line/70">
@@ -46,7 +46,7 @@ export default async function AccountsPage() {
               En cuentas
             </p>
             <p className="mt-1 text-base font-semibold tabular-nums text-accent">
-              {formatMoney(state.cashMinor)}
+              {formatMoney(cashMinor)}
             </p>
           </div>
           <div className="p-3.5">
@@ -54,122 +54,41 @@ export default async function AccountsPage() {
               Deuda tarjetas
             </p>
             <p className="mt-1 text-base font-semibold tabular-nums text-danger">
-              {formatMoney(state.debtMinor)}
+              {formatMoney(debtMinor)}
             </p>
           </div>
         </div>
-      </section>
 
-      <section className="mt-5">
-        <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold">
-          <IconWallet className="size-4 text-muted" />
-          Efectivo y cuentas
-        </h2>
-
-        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-          {activeAccounts.map((account) => (
-            <article key={account.id} className="card p-3.5">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate text-[13px] font-semibold">
-                    {account.name}
-                  </p>
-                  {ACCOUNT_TYPE_LABEL[account.type] !== account.name ? (
-                    <p className="text-[11px] text-muted">
-                      {ACCOUNT_TYPE_LABEL[account.type]}
-                    </p>
-                  ) : null}
-                </div>
-                <ConfirmDeleteButton
-                  action={deleteAccount}
-                  id={account.id}
-                  label={account.name}
-                />
+        <div className="p-4">
+          <h3 className="text-[10px] uppercase tracking-wider text-muted mb-2">Efectivo</h3>
+          <div className="grid grid-cols-2 divide-y divide-line/70">
+            {activeCash.map((account) => (
+              <div key={account.id} className="p-2 border-b border-line/70">
+                <p className="text-[11px] font-medium">{account.name}</p>
+                <p className="text-[12px] text-muted">{formatMoney(account.balanceMinor)}</p>
               </div>
-              <p
-                className={`mt-2 text-lg font-semibold tabular-nums ${
-                  account.balanceMinor < 0 ? "text-danger" : ""
-                }`}
-              >
-                {formatMoney(account.balanceMinor)}
-              </p>
-            </article>
-          ))}
-        </div>
-
-        <div className="mt-2.5">
-          <AccountForm />
-        </div>
-      </section>
-
-      <section className="mt-5">
-        <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold">
-          <IconCreditCard className="size-4 text-muted" />
-          Tarjetas de crédito
-        </h2>
-
-        {activeCards.length === 0 ? (
-          <div className="card p-6 text-center text-[12px] text-muted">
-            No hay tarjetas cargadas.
-          </div>
-        ) : (
-          <div className="grid gap-2.5 sm:grid-cols-2">
-            {activeCards.map((card) => (
-              <article
-                key={card.id}
-                id={`tarjeta-${card.id}`}
-                className="card scroll-mt-24 p-3.5"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-[13px] font-semibold">
-                      {card.name}
-                    </p>
-                    <p className="text-[11px] text-muted">
-                      Corte día {card.closingDay} · Pago día {card.dueDay}
-                    </p>
-                  </div>
-                  <ConfirmDeleteButton
-                    action={deleteCreditCard}
-                    id={card.id}
-                    label={card.name}
-                  />
-                </div>
-
-                <p className="mt-2 text-lg font-semibold tabular-nums">
-                  {formatMoney(card.debtMinor)}
-                  <span className="ml-1 text-[11px] font-normal text-muted">
-                    de {formatMoney(card.limitMinor)}
-                  </span>
-                </p>
-
-                <div className="mt-1.5">
-                  <ProgressBar
-                    ratio={card.utilization}
-                    color={card.utilization >= 0.8 ? "#f87171" : "#60a5fa"}
-                  />
-                </div>
-
-                <div className="mt-1.5 flex items-center justify-between text-[10px] text-muted">
-                  <span>{formatPercent(card.utilization)} usado</span>
-                  <span className="tabular-nums">
-                    Libre {formatMoney(Math.max(0, card.limitMinor - card.debtMinor))}
-                  </span>
-                </div>
-              </article>
             ))}
           </div>
-        )}
+        </div>
 
-        <div className="mt-2.5">
-          <CardForm />
+        <div className="p-4">
+          <h3 className="text-[10px] uppercase tracking-wider text-muted mb-2">Tarjetas</h3>
+          <div className="grid grid-cols-2 divide-y divide-line/70">
+            {activeCards.map((card) => (
+              <div key={card.id} className="p-2 border-b border-line/70">
+                <p className="text-[11px] font-medium">{card.name}</p>
+                <p className="text-[12px] text-danger">
+                  Deuda: {formatMoney(card.debtMinor)} / {formatMoney(card.limitMinor)}
+                </p>
+                <ProgressBar
+                  ratio={card.limitMinor > 0 ? card.debtMinor / card.limitMinor : 0}
+                  color={card.debtMinor > card.limitMinor ? "danger" : "accent"}
+                />
+              </div>
+            ))}
+          </div>
         </div>
       </section>
-
-      <p className="mt-4 px-1 text-[11px] leading-relaxed text-muted">
-        Un método con movimientos no se puede eliminar para no romper el
-        historial. Podés dejarlo sin saldo o archivarlo más adelante.
-      </p>
     </>
   );
 }

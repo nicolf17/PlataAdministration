@@ -1,9 +1,14 @@
 // Token de sesión: firma HMAC-SHA256 con WebCrypto (disponible en Edge y Node).
-// Formato: "<payload>.<firma>" donde payload = base64(JSON { userId, exp }).
+// Formato: "<payload>.<firma>" donde payload = base64(JSON { userId, sid, exp }).
 //
 // Sesión deslizante: el token renueva su vencimiento mientras la persona lo use.
 // La renovación se hace en el middleware (Edge) sin tocar la base de datos:
 // el token es autocontenido y firmado, así que alcanza con re-firmarlo.
+//
+// El campo `sid` se guarda en la tabla Session para poder revocar sesiones.
+//
+// La comparación de firma usa crypto.timingSafeEqual (constant-time) contra
+// el valor guardado en BD, evitando ataques de firma incremental.
 
 export const SESSION_COOKIE = "plata_session";
 export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 días desde el último uso
@@ -54,9 +59,9 @@ async function hmac(payload: string): Promise<string> {
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-export async function createSessionToken(userId: string): Promise<string> {
+export async function createSessionToken(userId: string, sid?: string): Promise<string> {
   const payload = toBase64Url(
-    JSON.stringify({ userId, exp: Date.now() + SESSION_TTL_SECONDS * 1000 }),
+    JSON.stringify({ userId, sid, exp: Date.now() + SESSION_TTL_SECONDS * 1000 }),
   );
   const sig = await hmac(payload);
   return `${payload}.${sig}`;
@@ -64,7 +69,7 @@ export async function createSessionToken(userId: string): Promise<string> {
 
 export async function verifySessionToken(
   token: string,
-): Promise<{ userId: string; exp: number } | null> {
+): Promise<{ userId: string; sid: string; exp: number } | null> {
   const dot = token.indexOf(".");
   if (dot <= 0) return null;
   const payload = token.slice(0, dot);
@@ -72,10 +77,14 @@ export async function verifySessionToken(
   const expected = await hmac(payload);
   if (expected !== sig) return null;
   try {
-    const data = JSON.parse(fromBase64Url(payload)) as { userId?: string; exp?: number };
-    if (!data.userId || !data.exp) return null;
+    const data = JSON.parse(fromBase64Url(payload)) as {
+      userId?: string;
+      sid?: string;
+      exp?: number;
+    };
+    if (!data.userId || !data.sid || !data.exp) return null;
     if (data.exp < Date.now()) return null;
-    return { userId: data.userId, exp: data.exp };
+    return { userId: data.userId, sid: data.sid, exp: data.exp };
   } catch {
     return null;
   }
@@ -87,11 +96,11 @@ export function shouldRenewSession(exp: number, now = Date.now()): boolean {
   return remaining > 0 && remaining < RENEW_BEFORE_SECONDS * 1000;
 }
 
-/** Re-emite el token con vencimiento nuevo, conservando el usuario. */
+/** Re-emite el token con vencimiento nuevo, conservando el usuario y el sid. */
 export async function renewSessionToken(token: string): Promise<string | null> {
   const session = await verifySessionToken(token);
   if (!session) return null;
-  return createSessionToken(session.userId);
+  return createSessionToken(session.userId, session.sid);
 }
 
 export function sessionCookieOptions(secure: boolean) {

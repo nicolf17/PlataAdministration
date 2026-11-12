@@ -197,3 +197,128 @@
     animation-duration: 1ms;
   }
 }
+
+/* --- Fondo de la pantalla de login ---------------------------------------
+   Sin imágenes ni JS: orbes de luz que flotan y una grilla en perspectiva
+   que se desplaza. Da profundidad sin restar legibilidad al formulario. */
+.auth-bg {
+  background:
+    radial-gradient(50rem 36rem at 50% -10%, #0b3a30 0%, transparent 60%),
+    radial-gradient(40rem 30rem at 100% 100%, #14243f 0%, transparent 55%),
+    #070b10;
+}
+
+.auth-orb {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.auth-orb-a {
+  top: -8rem;
+  left: -6rem;
+  height: 26rem;
+  width: 26rem;
+  background: radial-gradient(circle, rgba(52, 211, 153, 0.42) 0%, transparent 68%);
+  animation: auth-float-a 16s ease-in-out infinite;
+}
+
+.auth-orb-b {
+  bottom: -10rem;
+  right: -7rem;
+  height: 30rem;
+  width: 30rem;
+  background: radial-gradient(circle, rgba(96, 165, 250, 0.32) 0%, transparent 68%);
+  animation: auth-float-b 20s ease-in-out infinite;
+}
+
+.auth-orb-c {
+  top: 38%;
+  left: 50%;
+  height: 22rem;
+  width: 22rem;
+  margin-left: -11rem;
+  background: radial-gradient(circle, rgba(52, 211, 153, 0.18) 0%, transparent 70%);
+  animation: auth-float-a 24s ease-in-out infinite reverse;
+}
+
+/* Halo cónico girando muy lento: da sensación de profundidad 3D. */
+.auth-aurora {
+  position: absolute;
+  inset: -35%;
+  pointer-events: none;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(52, 211, 153, 0.16) 60deg,
+    transparent 140deg,
+    rgba(96, 165, 250, 0.14) 220deg,
+    transparent 300deg
+  );
+  animation: auth-spin 36s linear infinite;
+}
+
+/* Grilla en perspectiva que se desliza lentamente hacia el horizonte. */
+.auth-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(52, 211, 153, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(52, 211, 153, 0.16) 1px, transparent 1px);
+  background-size: 48px 48px;
+  transform: perspective(520px) rotateX(62deg) scale(2.4);
+  transform-origin: center bottom;
+  mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent 72%);
+  -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent 72%);
+  animation: auth-grid-drift 9s linear infinite;
+}
+
+@keyframes auth-float-a {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(2.5rem, -1.8rem, 0) scale(1.14);
+  }
+}
+
+@keyframes auth-float-b {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1.04);
+  }
+  50% {
+    transform: translate3d(-2.2rem, -1.4rem, 0) scale(0.92);
+  }
+}
+
+@keyframes auth-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes auth-grid-drift {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 0 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-orb-a,
+  .auth-orb-b,
+  .auth-orb-c,
+  .auth-aurora,
+  .auth-grid {
+    animation: none;
+  }
+}
