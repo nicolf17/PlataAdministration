@@ -243,22 +243,6 @@
   animation: auth-float-a 24s ease-in-out infinite reverse;
 }
 
-/* Halo cónico girando muy lento: da sensación de profundidad 3D. */
-.auth-aurora {
-  position: absolute;
-  inset: -35%;
-  pointer-events: none;
-  background: conic-gradient(
-    from 0deg,
-    transparent 0deg,
-    rgba(52, 211, 153, 0.09) 60deg,
-    transparent 140deg,
-    rgba(96, 165, 250, 0.07) 220deg,
-    transparent 300deg
-  );
-  animation: auth-spin 36s linear infinite;
-}
-
 /* Grilla en perspectiva que se desliza lentamente hacia el horizonte. */
 .auth-grid {
   position: absolute;

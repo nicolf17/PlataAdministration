@@ -17,19 +17,18 @@ export async function Shell({ children }: { children: React.ReactNode }) {
         {/* Fondo animado: orbes que flotan y una grilla en perspectiva. Puro CSS,
             sin blur sobre el contenido ni imágenes que cargar. */}
         <div aria-hidden className="auth-orb auth-orb-a" />
-        <div aria-hidden className="auth-orb auth-orb-b" />
-        <div aria-hidden className="auth-orb auth-orb-c" />
-        <div aria-hidden className="auth-aurora" />
         <div aria-hidden className="auth-grid" />
 
-        {/* Partículas luminosas: luces que brotan desde abajo hacia arriba
-            como chispas, sin interacción y con animación GPU-friendly. */}
+        {/* Partículas luminosas: luces que brotan desde abajo hacia arriba. */}
         <div aria-hidden className="auth-particles">
-          <span className="auth-particle" style={{ left: "16%", animationDelay: "0s" }} />
-          <span className="auth-particle" style={{ left: "33%", animationDelay: "1.6s" }} />
-          <span className="auth-particle" style={{ left: "50%", animationDelay: "0.8s" }} />
-          <span className="auth-particle" style={{ left: "66%", animationDelay: "2.2s" }} />
-          <span className="auth-particle" style={{ left: "82%", animationDelay: "1.3s" }} />
+          <span className="auth-particle" style={{ left: "12%", animationDelay: "0s" }} />
+          <span className="auth-particle" style={{ left: "26%", animationDelay: "0.9s" }} />
+          <span className="auth-particle" style={{ left: "40%", animationDelay: "1.7s" }} />
+          <span className="auth-particle" style={{ left: "54%", animationDelay: "0.4s" }} />
+          <span className="auth-particle" style={{ left: "68%", animationDelay: "2.1s" }} />
+          <span className="auth-particle" style={{ left: "80%", animationDelay: "0.7s" }} />
+          <span className="auth-particle" style={{ left: "88%", animationDelay: "1.5s" }} />
+          <span className="auth-particle" style={{ left: "95%", animationDelay: "2.4s" }} />
         </div>
 
         <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col px-3 pt-3 sm:px-4 sm:pt-5 md:px-8 md:pt-10">
