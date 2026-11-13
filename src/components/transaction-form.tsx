@@ -123,7 +123,11 @@ export function TransactionForm({
       amountMinor: amountMinor ?? 0,
       description,
       notes,
-      accountName: payer.startsWith("account:") ? payer.slice(8) : null,
+      accountName:
+        payer === "cash"
+          ? "Efectivo"
+          : (accounts.find((account) => `account:${account.id}` === payer)?.name ??
+            null),
       transferAccountName: null,
       cardName: payer.startsWith("card:") ? payer.slice(5) : null,
       categoryName: category?.name ?? null,
@@ -266,15 +270,19 @@ export function TransactionForm({
           required
         >
           <option value="">Elegir…</option>
-          <optgroup label="Efectivo / cuentas">
-            {accounts.map((account) => (
-              <option key={account.id} value={`account:${account.id}`}>
-                {account.name}
-              </option>
-            ))}
-          </optgroup>
+          {/* El efectivo es nativo: siempre está disponible y no se configura. */}
+          {type !== "TRANSFER" ? <option value="cash">Efectivo</option> : null}
+          {accounts.length > 0 ? (
+            <optgroup label="Débito / Ahorros">
+              {accounts.map((account) => (
+                <option key={account.id} value={`account:${account.id}`}>
+                  {account.name}
+                </option>
+              ))}
+            </optgroup>
+          ) : null}
           {type !== "INCOME" && cards.length > 0 ? (
-            <optgroup label="Tarjetas de crédito">
+            <optgroup label="Crédito">
               {cards.map((card) => (
                 <option key={card.id} value={`card:${card.id}`}>
                   {card.name}
@@ -299,7 +307,7 @@ export function TransactionForm({
             required
           >
             <option value="">Elegir…</option>
-            <optgroup label="Efectivo / cuentas">
+            <optgroup label="Débito / Ahorros">
               {accounts.map((account) => (
                 <option key={account.id} value={`account:${account.id}`}>
                   {account.name}
@@ -335,12 +343,12 @@ export function TransactionForm({
 
         <p className="mt-2 text-[11px] leading-relaxed text-muted">
           {editing
-            ? "Guardá los cambios. El historial de saldos se recalcula sola."
+            ? "Guardá los cambios. El saldo se recalcula solo."
             : type === "EXPENSE"
-              ? "Con tarjeta queda como deuda; con efectivo o cuenta sale del saldo."
+              ? "Efectivo se acumula aparte (sin tope). Con tarjeta queda como deuda."
               : type === "TRANSFER"
                 ? "Entre tus cuentas no es gasto. Hacia una tarjeta, es pago de deuda."
-                : "Suma al saldo de la cuenta elegida."}
+                : "Suma al saldo de la cuenta o del efectivo."}
         </p>
 
         {visibleCategories.length === 0 && type !== "TRANSFER" ? (

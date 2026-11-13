@@ -107,8 +107,8 @@ export default async function DashboardPage({
           label="Patrimonio neto"
           value={formatMoney(data.state.netWorthMinor)}
           hint={`${formatMoney(data.state.cashMinor)} en cuentas · ${formatMoney(
-            data.state.debtMinor,
-          )} en tarjetas`}
+            data.state.cash.balanceMinor,
+          )} en efectivo · ${formatMoney(data.state.debtMinor)} en tarjetas`}
           tone={data.state.netWorthMinor < 0 ? "negative" : "accent"}
         />
       </div>
@@ -189,32 +189,46 @@ export default async function DashboardPage({
             </div>
 
             <ul className="space-y-2.5">
-              {data.state.accounts
-                .filter((account) => !account.archived)
-                .map((account) => (
-                  <li
-                    key={account.id}
-                    className="flex items-center justify-between gap-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-[13px] font-medium">
-                        {account.name}
+              <li className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] font-medium">Efectivo</p>
+                  <p className="text-[11px] text-muted">
+                    Automático · sin tope
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 text-[13px] font-semibold tabular-nums ${
+                    data.state.cash.balanceMinor < 0 ? "text-danger" : ""
+                  }`}
+                >
+                  {formatMoney(data.state.cash.balanceMinor)}
+                </span>
+              </li>
+
+              {data.state.accounts.map((account) => (
+                <li
+                  key={account.id}
+                  className="flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-medium">
+                      {account.name}
+                    </p>
+                    {ACCOUNT_TYPE_LABEL[account.type] !== account.name ? (
+                      <p className="text-[11px] text-muted">
+                        {ACCOUNT_TYPE_LABEL[account.type]}
                       </p>
-                      {ACCOUNT_TYPE_LABEL[account.type] !== account.name ? (
-                        <p className="text-[11px] text-muted">
-                          {ACCOUNT_TYPE_LABEL[account.type]}
-                        </p>
-                      ) : null}
-                    </div>
-                    <span
-                      className={`shrink-0 text-[13px] font-semibold tabular-nums ${
-                        account.balanceMinor < 0 ? "text-danger" : ""
-                      }`}
-                    >
-                      {formatMoney(account.balanceMinor)}
-                    </span>
-                  </li>
-                ))}
+                    ) : null}
+                  </div>
+                  <span
+                    className={`shrink-0 text-[13px] font-semibold tabular-nums ${
+                      account.balanceMinor < 0 ? "text-danger" : ""
+                    }`}
+                  >
+                    {formatMoney(account.balanceMinor)}
+                  </span>
+                </li>
+              ))}
             </ul>
           </section>
 
@@ -226,30 +240,28 @@ export default async function DashboardPage({
               </span>
             </div>
 
-            {data.state.cards.filter((card) => !card.archived).length === 0 ? (
+            {data.state.cards.length === 0 ? (
               <p className="text-[12px] text-muted">No hay tarjetas cargadas.</p>
             ) : (
               <ul className="space-y-3">
-                {data.state.cards
-                  .filter((card) => !card.archived)
-                  .map((card) => (
-                    <li key={card.id}>
-                      <div className="mb-1.5 flex items-baseline justify-between gap-2">
-                        <span className="truncate text-[12px]">{card.name}</span>
-                        <span className="shrink-0 text-[11px] tabular-nums text-muted">
-                          {formatPercent(card.utilization)} del cupo
-                        </span>
-                      </div>
-                      <ProgressBar
-                        ratio={card.utilization}
-                        color={card.utilization >= 0.8 ? "#f87171" : "#60a5fa"}
-                      />
-                      <p className="mt-1 text-[10px] text-muted">
-                        {formatMoney(card.debtMinor)} de{" "}
-                        {formatMoney(card.limitMinor)}
-                      </p>
-                    </li>
-                  ))}
+                {data.state.cards.map((card) => (
+                  <li key={card.id}>
+                    <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                      <span className="truncate text-[12px]">{card.name}</span>
+                      <span className="shrink-0 text-[11px] tabular-nums text-muted">
+                        {formatPercent(card.utilization)} del cupo
+                      </span>
+                    </div>
+                    <ProgressBar
+                      ratio={card.utilization}
+                      color={card.utilization >= 0.8 ? "#f87171" : "#60a5fa"}
+                    />
+                    <p className="mt-1 text-[10px] text-muted">
+                      {formatMoney(card.debtMinor)} de{" "}
+                      {formatMoney(card.limitMinor)}
+                    </p>
+                  </li>
+                ))}
               </ul>
             )}
           </section>

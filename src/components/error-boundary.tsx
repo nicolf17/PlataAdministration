@@ -37,6 +37,13 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       if (this.props.fallback !== undefined) {
         return this.props.fallback;
       }
+      // Errores de desajuste cliente/servidor tras un deploy (o chunks viejos
+      // en caché) no se arreglan reintentando el render: hay que recargar.
+      const needsReload =
+        /server action|dynamically imported module|chunk|loading css chunk/i.test(
+          `${error.name} ${error.message}`,
+        );
+
       return (
         <div
           role="alert"
@@ -44,12 +51,23 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         >
           <h1 className="text-lg font-semibold tracking-tight">Algo se trabó en la carga</h1>
           <p className="max-w-md text-sm text-muted">
-            La app encontró un error inesperado al renderizar. No perdiste tus datos: se
-            guardan en tu dispositivo y en el servidor.
+            {needsReload
+              ? "La app se actualizó o el servidor estaba arrancando. Recargá y volvé a entrar: tus datos siguen guardados."
+              : "La app encontró un error inesperado al renderizar. Tus datos siguen guardados en el servidor."}
           </p>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={this.reset} className="btn btn-primary">
-              Reintentar
+            <button
+              type="button"
+              onClick={() => {
+                if (needsReload) {
+                  window.location.reload();
+                  return;
+                }
+                this.reset();
+              }}
+              className="btn btn-primary"
+            >
+              {needsReload ? "Recargar la app" : "Reintentar"}
             </button>
             <a href="/" className="btn btn-ghost">
               Ir al inicio

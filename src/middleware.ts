@@ -13,13 +13,9 @@ const PUBLIC_PATHS = ["/login", "/signup", "/api/health", "/manifest.webmanifest
 export async function middleware(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const session = token ? await verifySessionToken(token) : null;
-  const { pathname, searchParams } = request.nextUrl;
+  const { pathname } = request.nextUrl;
 
   const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-  // Al cerrar sesión redirigimos a /login?salida=1. Si el navegador todavía manda
-  // la cookie vieja en ese primer request, no lo devolvemos al panel: dejamos que
-  // el login se muestre (la cookie ya fue borrada por la action).
-  const isLogoutLanding = pathname === "/login" && searchParams.has("salida");
 
   let response: NextResponse;
 
@@ -27,11 +23,13 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     response = NextResponse.redirect(url);
-  } else if (session && !isLogoutLanding && (pathname === "/login" || pathname === "/signup")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    response = NextResponse.redirect(url);
   } else {
+    // Ojo: acá NO se redirige /login → / aunque el token esté firmado. El
+    // middleware solo puede verificar la firma; la sesión real vive en la base
+    // (tabla Session) y la chequea el servidor. Si el token sobrevive a la fila
+    // (logout en otra pestaña, sesión revocada), redirigir desde acá produce un
+    // bucle /login → / → /login y la pantalla de login nunca se renderiza.
+    // Esa decisión la toma la propia página /login con getSessionUser().
     response = NextResponse.next();
   }
 

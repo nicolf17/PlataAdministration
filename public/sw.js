@@ -1,4 +1,4 @@
-const CACHE = "plata-static-v5";
+const CACHE = "plata-static-v6";
 const OFFLINE = "/offline.html";
 const PRECACHE = [
   OFFLINE,
@@ -27,6 +27,30 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+/**
+ * Fetch con timeout y un reintento.
+ *
+ * La máquina de Fly puede estar arrancando (cold start): el primer intento
+ * queda colgado o vuelve 502/503. Un reintento corto evita mostrar "sin
+ * conexión" por un reinicio del servidor, que era lo que se veía al entrar.
+ */
+async function fetchWithRetry(request, { timeout = 15000, retries = 1 } = {}) {
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(request, { signal: AbortSignal.timeout(timeout) });
+      if (response.status < 500) return response;
+      lastError = new Error(`HTTP ${response.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+    if (attempt < retries) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    }
+  }
+  throw lastError;
+}
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
@@ -35,10 +59,9 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   // Navegación: siempre red primero; si no hay conexión, pantalla offline.
-  // El AbortSignal evita que una navegación nunca resuelta congele la pantalla.
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request, { signal: AbortSignal.timeout(10000) }).catch(async () => {
+      fetchWithRetry(request).catch(async () => {
         const offline = await caches.match(OFFLINE);
         return offline || Response.error();
       }),
@@ -55,7 +78,7 @@ self.addEventListener("fetch", (event) => {
       caches.open(CACHE).then(async (cache) => {
         const cached = await cache.match(request);
         if (cached) return cached;
-        const response = await fetch(request, { signal: AbortSignal.timeout(10000) });
+        const response = await fetchWithRetry(request, { timeout: 10000, retries: 1 });
         if (response.ok) cache.put(request, response.clone());
         return response;
       }),

@@ -1,5 +1,6 @@
 import { requireUserId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import type { AccountType } from "@/generated/prisma/client";
 
 export type TransactionType = "INCOME" | "EXPENSE" | "TRANSFER";
 
@@ -65,6 +66,227 @@ export function previousMonths(month: string, count: number): string[] {
   return months;
 }
 
+export type CashSnapshot = {
+  spentMinor: number;
+  incomeMinor: number;
+  balanceMinor: number;
+};
+
+export type AccountSnapshot = {
+  id: string;
+  name: string;
+  type: AccountType;
+  balanceMinor: number;
+};
+
+export type CardSnapshot = {
+  id: string;
+  name: string;
+  limitMinor: number;
+  closingDay: number;
+  dueDay: number;
+  debtMinor: number;
+  utilization: number;
+};
+
+export type MoneySnapshot = {
+  cash: CashSnapshot;
+  accounts: AccountSnapshot[];
+  cards: CardSnapshot[];
+  accountsMinor: number;
+  debtMinor: number;
+  netWorthMinor: number;
+};
+
+/**
+ * Estado del dinero del usuario.
+ *
+ * Regla del efectivo: es nativo. No se crea ni se edita, y no tiene saldo
+ * inicial ni tope. Vive en los movimientos que no apuntan a ninguna cuenta ni
+ * tarjeta (`accountId`, `transferAccountId` y `creditCardId` en null).
+ *
+ * Las cuentas viejas de tipo CASH (de versiones anteriores) se siguen leyendo
+ * como efectivo para no perder el historial, pero ya no se pueden crear.
+ */
+export async function getMoneySnapshot(userId: string): Promise<MoneySnapshot> {
+  const [accounts, cards] = await Promise.all([
+    prisma.account.findMany({
+      where: { userId, archived: false },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, name: true, type: true, initialBalanceMinor: true },
+    }),
+    prisma.creditCard.findMany({
+      where: { userId, archived: false },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, name: true, limitMinor: true, closingDay: true, dueDay: true },
+    }),
+  ]);
+
+  const cashAccounts = accounts.filter((account) => account.type === "CASH");
+  const debitAccounts = accounts.filter((account) => account.type !== "CASH");
+  const cashAccountIds = cashAccounts.map((account) => account.id);
+  const debitAccountIds = debitAccounts.map((account) => account.id);
+
+  const cashRows = await prisma.transaction.findMany({
+    where: {
+      userId,
+      OR: [
+        {
+          accountId: null,
+          transferAccountId: null,
+          creditCardId: null,
+          type: { in: ["INCOME", "EXPENSE"] },
+        },
+        ...(cashAccountIds.length > 0
+          ? [
+              { accountId: { in: cashAccountIds } },
+              { transferAccountId: { in: cashAccountIds } },
+            ]
+          : []),
+      ],
+    },
+    select: { type: true, amountMinor: true, accountId: true, transferAccountId: true },
+  });
+
+  const debitRows =
+    debitAccountIds.length > 0
+      ? await prisma.transaction.findMany({
+          where: {
+            userId,
+            OR: [
+              { accountId: { in: debitAccountIds } },
+              { transferAccountId: { in: debitAccountIds } },
+            ],
+          },
+          select: {
+            type: true,
+            amountMinor: true,
+            accountId: true,
+            transferAccountId: true,
+          },
+        })
+      : [];
+
+  const cardRows = await prisma.transaction.findMany({
+    where: { userId, creditCardId: { not: null } },
+    select: { creditCardId: true, type: true, amountMinor: true },
+  });
+
+  // Efectivo: arranca con el saldo inicial de cuentas CASH legadas (si hay).
+  let cashIncomeMinor = cashAccounts.reduce(
+    (sum, account) => sum + account.initialBalanceMinor,
+    0,
+  );
+  let cashSpentMinor = 0;
+
+  for (const row of cashRows) {
+    if (row.type === "EXPENSE") {
+      cashSpentMinor += row.amountMinor;
+    } else if (row.type === "INCOME") {
+      cashIncomeMinor += row.amountMinor;
+    } else if (row.type === "TRANSFER") {
+      // Desde una cuenta de efectivo legada: sale plata del bolsillo.
+      // Hacia una cuenta de efectivo legada: entra plata al bolsillo.
+      if (row.accountId && cashAccountIds.includes(row.accountId)) {
+        cashSpentMinor += row.amountMinor;
+      } else {
+        cashIncomeMinor += row.amountMinor;
+      }
+    }
+  }
+
+  const accountsSnapshot: AccountSnapshot[] = debitAccounts.map((account) => {
+    let balanceMinor = account.initialBalanceMinor;
+    for (const row of debitRows) {
+      if (row.type === "INCOME" && row.accountId === account.id) {
+        balanceMinor += row.amountMinor;
+      } else if (row.type === "EXPENSE" && row.accountId === account.id) {
+        balanceMinor -= row.amountMinor;
+      } else if (row.type === "TRANSFER") {
+        if (row.accountId === account.id) balanceMinor -= row.amountMinor;
+        if (row.transferAccountId === account.id) balanceMinor += row.amountMinor;
+      }
+    }
+    return {
+      id: account.id,
+      name: account.name,
+      type: account.type,
+      balanceMinor,
+    };
+  });
+
+  const cardsSnapshot: CardSnapshot[] = cards.map((card) => {
+    let debtMinor = 0;
+    for (const row of cardRows) {
+      if (row.creditCardId !== card.id) continue;
+      if (row.type === "EXPENSE") debtMinor += row.amountMinor;
+      else if (row.type === "TRANSFER") debtMinor -= row.amountMinor;
+    }
+    if (debtMinor < 0) debtMinor = 0;
+
+    return {
+      id: card.id,
+      name: card.name,
+      limitMinor: card.limitMinor,
+      closingDay: card.closingDay,
+      dueDay: card.dueDay,
+      debtMinor,
+      utilization: card.limitMinor > 0 ? debtMinor / card.limitMinor : 0,
+    };
+  });
+
+  const accountsMinor = accountsSnapshot.reduce(
+    (sum, account) => sum + account.balanceMinor,
+    0,
+  );
+  const debtMinor = cardsSnapshot.reduce((sum, card) => sum + card.debtMinor, 0);
+  const cashBalanceMinor = cashIncomeMinor - cashSpentMinor;
+
+  return {
+    cash: {
+      spentMinor: cashSpentMinor,
+      incomeMinor: cashIncomeMinor,
+      balanceMinor: cashBalanceMinor,
+    },
+    accounts: accountsSnapshot,
+    cards: cardsSnapshot,
+    accountsMinor,
+    debtMinor,
+    netWorthMinor: accountsMinor + cashBalanceMinor - debtMinor,
+  };
+}
+
+export async function getBudgetProgress(
+  userId: string,
+  month: string,
+  spending: CategorySlice[],
+): Promise<BudgetProgress[]> {
+  const budgets = await prisma.budget.findMany({
+    where: { userId, month },
+    include: { category: { select: { id: true, name: true, color: true } } },
+    orderBy: { limitMinor: "desc" },
+  });
+
+  return budgets.map<BudgetProgress>((budget) => {
+    const spentMinor = spending
+      .filter(
+        (slice) =>
+          slice.id === budget.categoryId || slice.parentId === budget.categoryId,
+      )
+      .reduce((sum, slice) => sum + slice.spentMinor, 0);
+
+    return {
+      id: budget.id,
+      categoryId: budget.categoryId,
+      categoryName: budget.category.name,
+      color: budget.category.color,
+      limitMinor: budget.limitMinor,
+      spentMinor,
+      ratio: budget.limitMinor > 0 ? spentMinor / budget.limitMinor : 0,
+    };
+  });
+}
+
 export async function getDashboard(month: string) {
   const { start, end } = monthRange(month);
   const userId = await requireUserId();
@@ -88,31 +310,11 @@ export async function getDashboard(month: string) {
   const savedMinor = incomeMinor - expenseMinor;
   const savingsRate = incomeMinor > 0 ? savedMinor / incomeMinor : 0;
 
-  const [accountBalances, cardBalances] = await Promise.all([
-    prisma.account.findMany({
-      where: { userId, archived: false },
-      select: { id: true, name: true, type: true, initialBalanceMinor: true, archived: true },
-    }),
-    prisma.creditCard.findMany({
-      where: { userId, archived: false },
-      select: {
-        id: true,
-        name: true,
-        limitMinor: true,
-        closingDay: true,
-        dueDay: true,
-        archived: true,
-      },
-    }),
+  const [snapshot, spending] = await Promise.all([
+    getMoneySnapshot(userId),
+    getCategorySpending(month),
   ]);
-
-  const cashMinor = accountBalances
-    .filter((a) => !a.archived)
-    .reduce((sum, a) => sum + a.initialBalanceMinor, 0);
-
-  const debtMinor = cardBalances
-    .filter((c) => !c.archived)
-    .reduce((sum, c) => sum + 0, 0);
+  const budgets = await getBudgetProgress(userId, month, spending.slices);
 
   const recommendations = savedMinor > 0 ? [
     { id: "1", severity: "success" as const, title: "¡Buen ahorro!", detail: "Guardaste $" + formatMoney(savedMinor) + " este mes." }
@@ -121,24 +323,12 @@ export async function getDashboard(month: string) {
   ];
 
   const state = {
-    cashMinor,
-    debtMinor,
-    netWorthMinor: incomeMinor - expenseMinor,
-    cards: cardBalances.map((c) => ({
-      id: c.id,
-      name: c.name,
-      debtMinor: 0,
-      utilization: c.limitMinor > 0 ? 0 : 0,
-      archived: c.archived,
-      limitMinor: c.limitMinor,
-    })),
-    accounts: accountBalances.map((a) => ({
-      id: a.id,
-      name: a.name,
-      type: a.type,
-      balanceMinor: a.initialBalanceMinor,
-      archived: a.archived,
-    })),
+    cashMinor: snapshot.accountsMinor,
+    debtMinor: snapshot.debtMinor,
+    netWorthMinor: snapshot.netWorthMinor,
+    cash: snapshot.cash,
+    cards: snapshot.cards,
+    accounts: snapshot.accounts,
   };
 
   const recent = await prisma.transaction.findMany({
@@ -159,8 +349,8 @@ export async function getDashboard(month: string) {
     savedMinor,
     savingsRate,
     txCount,
-    categories: [] as CategorySlice[],
-    budgets: [] as BudgetProgress[],
+    categories: spending.slices,
+    budgets,
     state,
     recommendations,
     recent: recent.map((tx) => ({
@@ -170,7 +360,9 @@ export async function getDashboard(month: string) {
       amountMinor: tx.amountMinor,
       description: tx.description,
       notes: tx.notes,
-      accountName: tx.account?.name ?? null,
+      accountName:
+        tx.account?.name ??
+        (tx.type !== "TRANSFER" && !tx.creditCardId ? "Efectivo" : null),
       transferAccountName: tx.transferAccount?.name ?? null,
       cardName: tx.creditCard?.name ?? null,
       categoryName: tx.category?.name ?? null,
@@ -204,7 +396,9 @@ export async function getTransactions(filters: { month: string; type?: Transacti
     amountMinor: tx.amountMinor,
     description: tx.description,
     notes: tx.notes,
-    accountName: tx.account?.name ?? null,
+    accountName:
+      tx.account?.name ??
+      (tx.type !== "TRANSFER" && !tx.creditCardId ? "Efectivo" : null),
     transferAccountName: tx.transferAccount?.name ?? null,
     cardName: tx.creditCard?.name ?? null,
     categoryName: tx.category?.name ?? null,
@@ -227,6 +421,7 @@ export async function getTransactionById(id: string) {
       accountId: true,
       transferAccountId: true,
       creditCardId: true,
+      account: { select: { type: true } },
     },
   });
   if (!tx) return null;
@@ -241,7 +436,16 @@ export async function getTransactionById(id: string) {
     accountId: tx.accountId,
     transferAccountId: tx.transferAccountId,
     creditCardId: tx.creditCardId,
-    payer: tx.accountId ? `account:${tx.accountId}` : tx.creditCardId ? `card:${tx.creditCardId}` : "",
+    payer:
+      tx.type === "TRANSFER"
+        ? tx.accountId
+          ? `account:${tx.accountId}`
+          : ""
+        : tx.accountId && tx.account?.type !== "CASH"
+          ? `account:${tx.accountId}`
+          : tx.creditCardId
+            ? `card:${tx.creditCardId}`
+            : "cash",
     destination:
       tx.type === "TRANSFER"
         ? tx.creditCardId
@@ -257,7 +461,9 @@ export async function getTransactionFormData() {
   const userId = await requireUserId();
   const [accounts, cards, categories] = await Promise.all([
     prisma.account.findMany({
-      where: { userId, archived: false },
+      // El efectivo es nativo: no se elige como cuenta. Las cuentas de tipo
+      // CASH de versiones viejas se siguen leyendo como efectivo en los saldos.
+      where: { userId, archived: false, type: { not: "CASH" } },
       orderBy: { createdAt: "asc" },
       select: { id: true, name: true, type: true },
     }),
@@ -289,88 +495,29 @@ export async function getCategoriesPageData() {
 
 export async function getAccountsPageData() {
   const userId = await requireUserId();
-  const [accountBalances, cardBalances] = await Promise.all([
-    prisma.account.findMany({
-      where: { userId, archived: false },
-      select: { id: true, name: true, type: true, initialBalanceMinor: true, archived: true },
-    }),
-    prisma.creditCard.findMany({
-      where: { userId, archived: false },
-      select: {
-        id: true,
-        name: true,
-        limitMinor: true,
-        closingDay: true,
-        dueDay: true,
-        archived: true,
-      },
-    }),
-  ]);
-
-  const cashMinor = accountBalances
-    .filter((a) => !a.archived)
-    .reduce((sum, a) => sum + a.initialBalanceMinor, 0);
-
-  const debtMinor = cardBalances
-    .filter((c) => !c.archived)
-    .reduce((sum, c) => sum + 0, 0);
+  const snapshot = await getMoneySnapshot(userId);
 
   return {
-    cashMinor,
-    debtMinor,
-    state: {
-      cash: accountBalances
-        .filter((a) => !a.archived)
-        .map((a) => ({
-          id: a.id,
-          name: a.name,
-          type: a.type,
-          balanceMinor: a.initialBalanceMinor,
-          archived: a.archived,
-        })),
-      cards: cardBalances.map((c) => ({
-        id: c.id,
-        name: c.name,
-        debtMinor: 0,
-        utilization: c.limitMinor > 0 ? 0 : 0,
-        archived: c.archived,
-        limitMinor: c.limitMinor,
-      })),
-    },
+    cash: snapshot.cash,
+    accounts: snapshot.accounts,
+    cards: snapshot.cards,
+    cashMinor: snapshot.accountsMinor,
+    debtMinor: snapshot.debtMinor,
+    netWorthMinor: snapshot.netWorthMinor,
   };
 }
 
 export async function getBudgetPageData(month: string) {
   const userId = await requireUserId();
   const categories = await getCategoriesPageData();
-  const budgets = await prisma.budget.findMany({
-    where: { userId, month },
-    include: { category: { select: { id: true, name: true, color: true } } },
-    orderBy: { limitMinor: "desc" },
-  });
-
-  const { slices: spending } = await getCategorySpending(month);
+  const spending = await getCategorySpending(month);
+  const budgets = await getBudgetProgress(userId, month, spending.slices);
 
   return {
-    budgets: budgets.map<BudgetProgress>((budget) => {
-      const spentMinor = spending
-        .filter((slice) =>
-          slice.id === budget.categoryId || slice.parentId === budget.categoryId,
-        )
-        .reduce((sum, slice) => sum + slice.spentMinor, 0);
-      return {
-        id: budget.id,
-        categoryId: budget.categoryId,
-        categoryName: budget.category.name,
-        color: budget.category.color,
-        limitMinor: budget.limitMinor,
-        spentMinor,
-        ratio: budget.limitMinor > 0 ? spentMinor / budget.limitMinor : 0,
-      };
-    }),
+    budgets,
     categories,
-    slices: [] as CategorySlice[],
-    expenseMinor: 0,
+    slices: spending.slices,
+    expenseMinor: spending.expenseMinor,
   };
 }
 

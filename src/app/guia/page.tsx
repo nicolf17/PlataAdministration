@@ -41,7 +41,7 @@ const RECORRIDO = [
   {
     href: "/cuentas",
     label: "Métodos",
-    text: "Tus cuentas de efectivo/banco y tus tarjetas de crédito. Todo movimiento sale de acá.",
+    text: "Tu cuenta de ahorros/débito, tus tarjetas de crédito y el panel automático de efectivo. Todo movimiento sale de acá.",
     Icon: IconWallet,
   },
   {
@@ -55,11 +55,11 @@ const RECORRIDO = [
 const PASOS = [
   {
     n: 1,
-    title: "Cargá tus métodos de pago",
+    title: "Cargá tus cuentas y tarjetas",
     href: "/cuentas",
     Icon: IconWallet,
-    body: "Antes de anotar movimientos necesitás decir de dónde sale la plata. En «Métodos» vas a ver lo que ya tenés cargado y acá abajo están los formularios para agregarlo: efectivo o cuenta de ahorros (con saldo inicial opcional) y tarjeta de crédito (con cupo, día de corte y día de pago).",
-    tip: "El saldo inicial es la plata que tenés hoy en esa cuenta. No es obligatorio: si no lo sabés, dejalo en cero.",
+    body: "En «Métodos» hay dos formularios plegables: uno para agregar tu tarjeta débito / cuenta de ahorros (nombre y saldo actual) y otro para tarjeta de crédito (cupo, día de corte y día de pago). Son independientes: abrís uno y el otro queda cerrado.",
+    tip: "El efectivo no se carga: ya existe por defecto. Solo lo elegís al registrar un movimiento y su panel se calcula solo.",
   },
   {
     n: 2,
@@ -82,16 +82,16 @@ const PASOS = [
     title: "Anotá tus gastos del día a día",
     href: "/movimientos#nuevo",
     Icon: IconArrowUp,
-    body: "Cada compra es un movimiento tipo «Gasto»: monto, descripción corta, fecha, cuenta o tarjeta y categoría. Anotarlos en el momento evita que se te acumulen y te olvides de la mitad.",
-    tip: "Si pagaste con tarjeta, elegí la tarjeta como medio. Queda como deuda, no como salida de efectivo: eso es correcto.",
+    body: "Cada compra es un movimiento tipo «Gasto»: monto, descripción corta, fecha y categoría. En el selector de método de pago vas a ver tres grupos: Efectivo, Débito / Ahorros (tus cuentas) y Crédito (tus tarjetas). Anotarlos en el momento evita que se te acumulen y te olvides de la mitad.",
+    tip: "El efectivo no tiene tope: todo lo que gastás en efectivo se acumula en su panel de «Métodos» para que veas cuánto y en qué lo usás.",
   },
   {
     n: 5,
     title: "Definí presupuestos por categoría",
     href: "/presupuestos",
     Icon: IconTarget,
-    body: "Elegí un mes, una categoría de gasto y un límite. La barra te muestra cuánto llevás gastado y el panel te avisa cuando estás cerca del tope o ya lo pasaste.",
-    tip: "Los presupuestos son por mes: podés copiar el mismo límite todos los meses sin volver a pensarlo.",
+    body: "Elegí un mes, una categoría de gasto y un límite. El selector solo muestra categorías de GASTO (las de ingreso no se presupuestan). La barra te muestra cuánto llevás gastado y el panel te avisa cuando estás cerca del tope o ya lo pasaste.",
+    tip: "Si creaste una categoría de gasto nueva, ya aparece en el selector sin recargar nada.",
   },
   {
     n: 6,
@@ -105,20 +105,28 @@ const PASOS = [
 
 const PREGUNTAS = [
   {
+    q: "¿Cómo funciona el efectivo?",
+    a: "Es un método nativo: no se crea, no se edita y no tiene saldo inicial ni tope. Lo elegís al registrar un movimiento y en «Métodos» ves un panel que suma lo que gastaste y lo que ingresaste en efectivo. Sirve para saber cuánto usás el efectivo, no para controlar un saldo.",
+  },
+  {
+    q: "¿Por qué una categoría no aparece en presupuestos?",
+    a: "Porque el selector solo muestra categorías de gasto. Las de ingreso (salario, prestaciones, etc.) no se presupuestan: no tiene sentido ponerle un límite a la plata que entra.",
+  },
+  {
     q: "¿Cuál es la diferencia entre cuenta y tarjeta?",
-    a: "Una cuenta es plata que tenés (efectivo, banco, ahorros). Una tarjeta es plata que debés. Por eso un gasto con tarjeta afecta tu deuda, no tu efectivo, hasta que pagás el resumen.",
+    a: "Una cuenta es plata que tenés (banco, ahorros, débito). Una tarjeta es plata que debés. Por eso un gasto con tarjeta sube tu deuda y no toca tu efectivo hasta que pagás el resumen. El efectivo es aparte: se acumula según los movimientos que registrás en efectivo.",
   },
   {
     q: "¿Cómo pago la tarjeta?",
-    a: "Registrá una «Transferencia» desde tu cuenta de banco hacia la tarjeta. Así baja la deuda y baja el saldo de la cuenta, como en la vida real.",
+    a: "Registrá una «Transferencia» desde tu cuenta de ahorros hacia la tarjeta. Así baja la deuda y baja el saldo de la cuenta, como en la vida real.",
   },
   {
     q: "¿Puedo editar o borrar un movimiento?",
-    a: "Sí. En «Movimientos» cada fila tiene los botones de editar y eliminar. Los cambios se reflejan al instante en el panel y en los presupuestos.",
+    a: "Sí. En «Movimientos» cada fila tiene los botones de editar y eliminar. Los cambios se reflejan al instante en el panel, en los saldos y en los presupuestos.",
   },
   {
     q: "¿Dónde quedan mis datos?",
-    a: "En una base SQLite privada del servidor de la app. Cada usuario ve solo sus propios movimientos, cuentas, categorías y presupuestos.",
+    a: "En una base SQLite privada dentro del servidor de la app, guardada en un volumen persistente. Cada usuario ve solo sus propios movimientos, cuentas, categorías y presupuestos, y los datos sobreviven a recargas y reinicios.",
   },
   {
     q: "¿Puedo usar la app sin internet?",
@@ -223,7 +231,7 @@ export default async function GuidePage() {
         <section className="card p-4 sm:p-5">
           <h2 className="flex items-center gap-2 text-sm font-semibold">
             <IconCheck className="size-4 text-accent" />
-            Tres reglas que te van a salvar
+            Cuatro reglas que te van a salvar
           </h2>
           <ul className="mt-3 space-y-3">
             <li className="flex gap-2.5">
@@ -248,6 +256,14 @@ export default async function GuidePage() {
                 <span className="font-semibold text-foreground">La tarjeta es deuda.</span>{" "}
                 El gasto con tarjeta sube la deuda; el pago del resumen la baja. El patrimonio
                 neto es lo que tenés menos lo que debés.
+              </p>
+            </li>
+            <li className="flex gap-2.5">
+              <IconWallet className="mt-0.5 size-4 shrink-0 text-muted" />
+              <p className="text-[12px] leading-relaxed text-muted">
+                <span className="font-semibold text-foreground">El efectivo es automático.</span>{" "}
+                No lo des de alta ni le pongas tope: elegilo en el movimiento y el panel de
+                «Métodos» suma lo gastado y lo ingresado en efectivo.
               </p>
             </li>
           </ul>

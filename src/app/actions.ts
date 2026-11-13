@@ -40,11 +40,15 @@ function str(formData: FormData, key: string): string {
   return String(formData.get(key) ?? "").trim();
 }
 
-/**"account:abc" | "card:xyz" | "" -> partes */
+/** "cash" | "account:abc" | "card:xyz" | "" -> partes */
 function parsePayer(value: string): {
   accountId?: string;
   cardId?: string;
+  cash?: boolean;
 } {
+  if (value === "cash") {
+    return { cash: true };
+  }
   if (value.startsWith("account:")) {
     return { accountId: value.slice("account:".length) };
   }
@@ -115,15 +119,18 @@ async function validateTransaction(
     }
   }
 
-  if (type.data === "EXPENSE" && !payer.accountId && !payer.cardId) {
-    return { ok: false, message: "Elegí con qué cuenta o tarjeta pagaste." };
+  if (type.data === "EXPENSE" && !payer.accountId && !payer.cardId && !payer.cash) {
+    return { ok: false, message: "Elegí con qué pagaste: efectivo, débito o crédito." };
   }
 
-  if (type.data === "INCOME" && !payer.accountId) {
-    return { ok: false, message: "Elegí en qué cuenta entró la plata." };
+  if (type.data === "INCOME" && !payer.accountId && !payer.cash) {
+    return { ok: false, message: "Elegí dónde entró la plata." };
   }
 
   if (type.data === "TRANSFER") {
+    if (payer.cash) {
+      return { ok: false, message: "Las transferencias se hacen entre cuentas o tarjetas." };
+    }
     if (!payer.accountId) {
       return { ok: false, message: "Elegí la cuenta de origen." };
     }
@@ -450,7 +457,9 @@ export async function login(_prev: ActionState, formData: FormData): Promise<Act
   return redirect("/?ingreso=1");
 }
 
-const accountTypes = ["CASH", "SAVINGS"] as const;
+// El efectivo es nativo y automático: no se crea como cuenta. El alta de
+// métodos de pago solo admite cuentas de ahorro / tarjetas débito.
+const accountTypes = ["SAVINGS"] as const;
 
 export async function createAccount(
   _prev: ActionState,
@@ -480,7 +489,7 @@ export async function createAccount(
   });
 
   refreshAll();
-  return { ok: true, message: "Cuenta creada." };
+  return { ok: true, message: "Cuenta de ahorros creada." };
 }
 
 export async function deleteAccount(
