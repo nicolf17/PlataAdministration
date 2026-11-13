@@ -121,6 +121,10 @@ const PREGUNTAS = [
     a: "Registrá una «Transferencia» desde tu cuenta de ahorros hacia la tarjeta. Así baja la deuda y baja el saldo de la cuenta, como en la vida real.",
   },
   {
+    q: "¿Puedo borrar una cuenta o una tarjeta?",
+    a: "Sí, desde «Métodos» con el botón de la papelera. La app te pide confirmación antes de borrar y desaparece de tus métodos de pago. Si esa cuenta o tarjeta ya tiene movimientos, no se puede eliminar: se bloquea a propósito para no perder el historial.",
+  },
+  {
     q: "¿Puedo editar o borrar un movimiento?",
     a: "Sí. En «Movimientos» cada fila tiene los botones de editar y eliminar. Los cambios se reflejan al instante en el panel, en los saldos y en los presupuestos.",
   },
@@ -165,7 +169,9 @@ export default async function GuidePage() {
         </h2>
         <p className="mt-1 text-[12px] leading-relaxed text-muted">
           Abajo en el celular y a la izquierda en la compu tenés siempre el mismo menú.
-          Estas son las cinco pantallas y para qué sirve cada una.
+          Estas son las cinco pantallas y para qué sirve cada una. La guía no ocupa un
+          lugar en el menú: en la compu está al final de la barra de la izquierda y en
+          el celular es el botón «Guía» de arriba a la derecha.
         </p>
         <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {RECORRIDO.map(({ href, label, text, Icon }) => (

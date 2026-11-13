@@ -88,13 +88,16 @@ export async function Shell({ children }: { children: React.ReactNode }) {
         </Link>
 
         <div className="flex items-center gap-2">
+          {/* En el celular el ícono solo no decía nada: lleva la palabra para
+              que se entienda sin conocer la app. */}
           <Link
             href="/guia"
             aria-label="Guía de uso"
             title="Guía de uso"
-            className="grid size-9 place-items-center rounded-md border border-[#243447] bg-[#0d141d] text-foreground/75 transition-colors hover:border-[#2f4358] hover:bg-surface-2 hover:text-foreground"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#243447] bg-[#0d141d] px-2.5 text-[11px] font-semibold text-foreground/80 transition-colors hover:border-[#2f4358] hover:bg-surface-2 hover:text-foreground"
           >
-            <IconInfo className="size-4" />
+            <IconInfo className="size-3.5" />
+            Guía
           </Link>
           <NewMovementButton />
           <UserMenu name={user.name} />

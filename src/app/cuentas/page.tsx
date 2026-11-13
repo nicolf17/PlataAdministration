@@ -167,6 +167,7 @@ export default async function AccountsPage() {
                         action={deleteAccount}
                         id={account.id}
                         label={account.name}
+                        description="Se quita de tus métodos de pago. Si tiene movimientos asociados no se puede borrar, así no perdés el historial."
                       />
                     </div>
                   </div>
@@ -213,6 +214,7 @@ export default async function AccountsPage() {
                         action={deleteCreditCard}
                         id={card.id}
                         label={card.name}
+                        description="Se quita la tarjeta y su deuda deja de contar en tu patrimonio. Si tiene movimientos asociados no se puede borrar, así no perdés el historial."
                       />
                     </div>
                   </div>

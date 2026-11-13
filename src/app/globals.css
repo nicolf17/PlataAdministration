@@ -160,6 +160,22 @@
   animation: rise 320ms ease both;
 }
 
+/* Diálogo de confirmación: aparece con un salto corto desde abajo. */
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-dialog-in {
+  animation: dialog-in 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 /* Toast: entra desde arriba hacia abajo y sale de vuelta hacia arriba. */
 @keyframes toast-in {
   from {
@@ -193,7 +209,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .animate-toast-in,
-  .animate-toast-out {
+  .animate-toast-out,
+  .animate-dialog-in {
     animation-duration: 1ms;
   }
 }
@@ -339,7 +356,8 @@
    El resto de animaciones globales (toasts) siguen respeta la preferencia. */
 @media (prefers-reduced-motion: reduce) {
   .animate-toast-in,
-  .animate-toast-out {
+  .animate-toast-out,
+  .animate-dialog-in {
     animation-duration: 1ms;
   }
 }

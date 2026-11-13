@@ -95,6 +95,7 @@ function CategorySection({
                 action={deleteCategory}
                 id={category.id}
                 label={category.name}
+                description="Los movimientos no se borran: quedan como «sin categoría» y podés reasignarlos cuando quieras."
               />
             </li>
           ))}
