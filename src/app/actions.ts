@@ -58,7 +58,19 @@ function parsePayer(value: string): {
   return {};
 }
 
-function refreshAll() {
+async function refreshAll() {
+  // SQLite trabaja en modo WAL: el commit queda en el archivo `-wal` hasta que
+  // alguien hace checkpoint. Si el proceso muere de golpe (reinicio de la
+  // máquina), ese `-wal` puede quedar huérfano y el último movimiento "se
+  // pierde" aunque la transacción haya respondido OK. Forzamos el checkpoint
+  // en cada escritura para que el dato quede en el archivo principal.
+  try {
+    await prisma.$queryRawUnsafe("PRAGMA wal_checkpoint(TRUNCATE)");
+  } catch (error) {
+    // Si falla (por ejemplo, un lector activo), no rompemos la action:
+    // el dato ya está commiteado y el próximo request reintenta.
+    console.error("[plata] wal_checkpoint falló:", error);
+  }
   revalidatePath("/", "layout");
 }
 
@@ -210,7 +222,7 @@ export async function createTransaction(
     },
   });
 
-  refreshAll();
+  await refreshAll();
   return { ok: true, message: "Movimiento registrado." };
 }
 
@@ -248,7 +260,7 @@ export async function updateTransaction(
     },
   });
 
-  refreshAll();
+  await refreshAll();
   return { ok: true, message: "Movimiento actualizado." };
 }
 
@@ -260,7 +272,7 @@ export async function deleteTransaction(formData: FormData): Promise<void> {
   await prisma.transaction.deleteMany({
     where: { id, userId },
   });
-  refreshAll();
+  await refreshAll();
 }
 
 export async function logout(_prev: ActionState): Promise<ActionState> {
@@ -488,7 +500,7 @@ export async function createAccount(
     },
   });
 
-  refreshAll();
+  await refreshAll();
   return { ok: true, message: "Cuenta de ahorros creada." };
 }
 
@@ -516,7 +528,7 @@ export async function deleteAccount(
 
   const deleted = await prisma.account.deleteMany({ where: { id, userId } });
   if (deleted.count === 0) return { ok: false, message: "Esa cuenta ya no existe." };
-  refreshAll();
+  await refreshAll();
   return { ok: true, message: "Cuenta eliminada." };
 }
 
@@ -574,7 +586,7 @@ export async function createCategory(
     },
   });
 
-  refreshAll();
+  await refreshAll();
   return { ok: true, message: "Categoría creada." };
 }
 
@@ -591,7 +603,7 @@ export async function deleteCategory(
   });
   const deleted = await prisma.category.deleteMany({ where: { id, userId } });
   if (deleted.count === 0) return { ok: false, message: "Esa categoría ya no existe." };
-  refreshAll();
+  await refreshAll();
   return {
     ok: true,
     message:
@@ -651,7 +663,7 @@ export async function createCreditCard(
     },
   });
 
-  refreshAll();
+  await refreshAll();
   return { ok: true, message: "Tarjeta creada." };
 }
 
@@ -676,7 +688,7 @@ export async function deleteCreditCard(
 
   const deleted = await prisma.creditCard.deleteMany({ where: { id, userId } });
   if (deleted.count === 0) return { ok: false, message: "Esa tarjeta ya no existe." };
-  refreshAll();
+  await refreshAll();
   return { ok: true, message: "Tarjeta eliminada." };
 }
 
@@ -722,7 +734,7 @@ export async function upsertBudget(
       data: { limitMinor },
     });
 
-    refreshAll();
+    await refreshAll();
     return { ok: true, message: "Presupuesto actualizado." };
   }
 
@@ -732,6 +744,6 @@ export async function upsertBudget(
     update: { limitMinor },
   });
 
-  refreshAll();
+  await refreshAll();
   return { ok: true, message: "Presupuesto guardado." };
 }
