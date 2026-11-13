@@ -6,7 +6,7 @@ import { createAccount, type ActionState } from "@/app/actions";
 import { AmountInput } from "@/components/amount-input";
 
 const TYPES = [
-  { value: "CASH", label: "Efectivo" },
+  { value: "SAVINGS", label: "Cuenta de ahorros / débito" },
 ];
 
 export function AccountForm() {
@@ -18,9 +18,9 @@ export function AccountForm() {
   return (
     <details className="card group p-4 open:pb-5">
       <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-semibold">
-        Agregar método de pago
+        Agregar tarjeta débito / cuenta de ahorros
         <span className="text-xs font-normal text-muted group-open:hidden">
-          Efectivo
+          Ahorros / débito
         </span>
       </summary>
 
@@ -32,7 +32,7 @@ export function AccountForm() {
           <input
             id="account-name"
             name="name"
-            placeholder="Ej: Efectivo"
+            placeholder="Ej: Cuenta de ahorros"
             className="input"
             required
           />
@@ -46,7 +46,7 @@ export function AccountForm() {
             id="account-type"
             name="type"
             className="input"
-            defaultValue="CASH"
+            defaultValue="SAVINGS"
           >
             {TYPES.map((type) => (
               <option key={type.value} value={type.value}>

@@ -13,15 +13,17 @@ type BudgetInitial = {
   limitMinor: number;
 };
 
+type BudgetFormProps = {
+  month: string;
+  categories: Array<{ id: string; name: string; parentId: string | null; type?: string }>;
+  initial?: BudgetInitial;
+};
+
 export function BudgetForm({
   month,
   categories,
   initial,
-}: {
-  month: string;
-  categories: Array<{ id: string; name: string; parentId: string | null }>;
-  initial?: BudgetInitial;
-}) {
+}: BudgetFormProps) {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
     upsertBudget,
     null,
@@ -61,11 +63,13 @@ export function BudgetForm({
             defaultValue=""
           >
             <option value="">Elegir…</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
+            {categories
+              .filter((category) => category.type === "EXPENSE")
+              .map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
           </select>
         )}
       </div>
