@@ -17,6 +17,7 @@ export type SessionUser = {
   id: string;
   email: string;
   name: string;
+  onboardingCompleted: boolean;
 };
 
 export function hashPassword(password: string): string {
@@ -72,7 +73,8 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       data: { expiresAt: new Date(Date.now() + SESSION_TTL_SECONDS * 1000) },
     });
   }
-  return { id: user.id, email: user.email, name: user.name };
+  // Retornar datos básicos del usuario incluyendo estado de onboarding
+  return { id: user.id, email: user.email, name: user.name, onboardingCompleted: user.onboardingCompleted };
 }
 
 export async function requireUserId(): Promise<string> {

@@ -17,34 +17,30 @@ export async function middleware(request: NextRequest) {
 
   const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
-  let response: NextResponse;
+  // Inicializamos response con next() por defecto
+  let response = NextResponse.next();
 
   if (!session && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     response = NextResponse.redirect(url);
-  } else {
-    // Ojo: acá NO se redirige /login → / aunque el token esté firmado. El
-    // middleware solo puede verificar la firma; la sesión real vive en la base
-    // (tabla Session) y la chequea el servidor. Si el token sobrevive a la fila
-    // (logout en otra pestaña, sesión revocada), redirigir desde acá produce un
-    // bucle /login → / → /login y la pantalla de login nunca se renderiza.
-    // Esa decisión la toma la propia página /login con getSessionUser().
-    response = NextResponse.next();
-  }
-
-  // Sesión deslizante: si la persona sigue usando la app, el token se renueva.
-  // Se hace acá (Edge) porque es donde se pueden escribir cookies en cada request.
-  if (token && session && shouldRenewSession(session.exp)) {
-    const renewed = await renewSessionToken(token);
-    if (renewed) {
-      response.cookies.set(
-        SESSION_COOKIE,
-        renewed,
-        sessionCookieOptions(process.env.NODE_ENV === "production"),
-      );
+  } else if (session && !isPublic) {
+    // Sesión válida: renovación en Edge sin BD (Prisma)
+    // La verificación real de onboardingCompleted se hará en el layout privado
+    // (Server Component). Aquí solo renovamos la sesión.
+    if (token && session && shouldRenewSession(session.exp)) {
+      const renewed = await renewSessionToken(token);
+      if (renewed) {
+        response.cookies.set(
+          SESSION_COOKIE,
+          renewed,
+          sessionCookieOptions(process.env.NODE_ENV === "production"),
+        );
+      }
     }
+    // response ya es NextResponse.next() por la inicialización
   }
+  // Si es ruta pública y hay sesión, o cualquier otro caso, response sigue siendo next()
 
   return response;
 }

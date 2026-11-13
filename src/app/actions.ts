@@ -288,13 +288,18 @@ export async function signup(_prev: ActionState, formData: FormData): Promise<Ac
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, message: "Poné un email válido." };
   if (password.length < 6) return { ok: false, message: "La contraseña debe tener al menos 6 caracteres." };
 
+  // Validación temprana: verificar si el correo ya está registrado
+  const existingUser = await prisma.user.findUnique({ where: { email } });
+  if (existingUser) {
+    return { ok: false, message: "Este email ya está registrado. ¿Ya tenés una cuenta? Ingresá con tus datos." };
+  }
+
   // 5 registros por hora por IP: frena el spam de códigos y el abuso de Brevo.
   const ip = await clientIp();
   const limit = consume(`signup:${ip}`, 5, 60 * 60 * 1000);
   if (!limit.ok) return { ok: false, message: waitMessage(limit.retryAfterMs) };
 
   // Evitar enumeración por timing: responder siempre igual.
-  const existing = await prisma.user.findUnique({ where: { email } });
   const code = generateVerificationCode();
   const passwordHash = hashPassword(password);
   const codeHash = hashVerificationCode(email, code);
@@ -389,10 +394,8 @@ export async function verifySignup(_prev: ActionState, formData: FormData): Prom
   });
   await prisma.pendingSignup.deleteMany({ where: { email } });
 
-  // La cuenta recién confirmada entra directo: sesión y cookie en la misma request.
-  await createSession(user.id, randomUUID());
-
-  return { ok: true, message: "Cuenta confirmada. ¡Bienvenido!" };
+  // Redirigir al onboarding en lugar de entrar directo al panel
+  redirect("/onboarding?registroExitoso=true");
 }
 
 export async function resendSignupCode(

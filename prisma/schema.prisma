@@ -44,6 +44,7 @@ model User {
   emailVerifiedAt DateTime?
   createdAt    DateTime  @default(now())
 
+  onboardingCompleted Boolean  @default(false)
   accounts        Account[]
   creditCards     CreditCard[]
   categories     Category[]
