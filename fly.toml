@@ -11,14 +11,12 @@ kill_timeout = "30s"
   NODE_ENV = "production"
   PORT = "3000"
   HOSTNAME = "0.0.0.0"
-  DATABASE_URL = "file:/data/plata.db"
-  # SESSION_SECRET NO va acá: es un secreto de Fly (`fly secrets set`).
-  # Estuvo commiteado y el repo es público: cualquiera podía forjar sesiones.
+  # DATABASE_URL y SESSION_SECRET NO van acá: son secretos (`fly secrets set`).
+  # La base es Postgres, no un archivo: no hace falta volumen persistente.
 
 [http_service]
   internal_port = 3000
   force_https = true
-  # Una sola máquina + volumen persistente. SQLite no escala horizontalmente.
   auto_stop_machines = "off"
   auto_start_machines = true
   min_machines_running = 1
@@ -39,8 +37,3 @@ kill_timeout = "30s"
   memory = "512mb"
   cpu_kind = "shared"
   cpus = 1
-
-[mounts]
-  source = "plata_data"
-  destination = "/data"
-  initial_size = "1gb"

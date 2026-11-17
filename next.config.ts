@@ -1,11 +1,35 @@
 import type { NextConfig } from "next";
 
+// Content Security Policy baseada: scripts/estilos self, img data:, connect a nuestra API,
+// fonts self, frame-ancestors none (evita framing), worker-src self blob:.
+// En desarrollo React necesita eval() para reconstruir callstacks; sin él la
+// hidratación falla y Next deja el HTML del stream oculto (pantalla en blanco).
+// En producción esa excepción no hace falta, así que no se incluye.
+const isDev = process.env.NODE_ENV !== "production";
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  isDev ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'" : "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data:",
+  "font-src 'self'",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "worker-src 'self' blob:",
+  // Solo en producción: en dev rompería el HMR y los assets en http.
+  !isDev ? "upgrade-insecure-requests" : null,
+]
+  .filter(Boolean)
+  .join("; ");
+
 const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
-  // better-sqlite3 es un módulo nativo: debe cargarse desde node_modules.
-  serverExternalPackages: ["better-sqlite3", "@prisma/adapter-better-sqlite3"],
+  // El driver de Postgres usa APIs de Node (sockets, tls): no lo bundleamos.
+  serverExternalPackages: ["pg"],
   turbopack: {
     rules: {
       "*.css": {
@@ -39,19 +63,7 @@ const nextConfig: NextConfig = {
           // fonts self, frame-ancestors none (evita framing), worker-src self blob:.
           {
             key: "Content-Security-Policy",
-            value:
-              "default-src 'self'; " +
-              "script-src 'self' 'unsafe-inline'; " +
-              "style-src 'self' 'unsafe-inline'; " +
-              "img-src 'self' data:; " +
-              "font-src 'self'; " +
-              "connect-src 'self'; " +
-              "object-src 'none'; " +
-              "base-uri 'self'; " +
-              "form-action 'self'; " +
-              "frame-ancestors 'none'; " +
-              "worker-src 'self' blob:; " +
-              "upgrade-insecure-requests",
+            value: contentSecurityPolicy,
           },
         ],
       },

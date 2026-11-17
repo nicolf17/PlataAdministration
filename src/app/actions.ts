@@ -40,6 +40,24 @@ function str(formData: FormData, key: string): string {
   return String(formData.get(key) ?? "").trim();
 }
 
+const AUTH_UNEXPECTED =
+  "No pudimos completar la operación en este momento. Probá de nuevo en unos minutos.";
+
+/**
+ * `redirect()` de Next no retorna: lanza una excepción con digest NEXT_REDIRECT.
+ * Un try/catch genérico la atraparía y el redirect nunca ocurriría, así que hay
+ * que dejar que siga su curso.
+ */
+function isRedirectError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "digest" in error &&
+    typeof (error as { digest?: unknown }).digest === "string" &&
+    (error as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+  );
+}
+
 /** "cash" | "account:abc" | "card:xyz" | "" -> partes */
 function parsePayer(value: string): {
   accountId?: string;
@@ -59,18 +77,8 @@ function parsePayer(value: string): {
 }
 
 async function refreshAll() {
-  // SQLite trabaja en modo WAL: el commit queda en el archivo `-wal` hasta que
-  // alguien hace checkpoint. Si el proceso muere de golpe (reinicio de la
-  // máquina), ese `-wal` puede quedar huérfano y el último movimiento "se
-  // pierde" aunque la transacción haya respondido OK. Forzamos el checkpoint
-  // en cada escritura para que el dato quede en el archivo principal.
-  try {
-    await prisma.$queryRawUnsafe("PRAGMA wal_checkpoint(TRUNCATE)");
-  } catch (error) {
-    // Si falla (por ejemplo, un lector activo), no rompemos la action:
-    // el dato ya está commiteado y el próximo request reintenta.
-    console.error("[plata] wal_checkpoint falló:", error);
-  }
+  // Con Postgres el commit ya es durable: no hace falta forzar checkpoints como
+  // hacíamos con SQLite (WAL). Solo invalidamos la caché de datos de Next.
   revalidatePath("/", "layout");
 }
 
@@ -276,11 +284,25 @@ export async function deleteTransaction(formData: FormData): Promise<void> {
 }
 
 export async function logout(_prev: ActionState): Promise<ActionState> {
-  await clearSession();
+  try {
+    await clearSession();
+  } catch (error) {
+    console.error("[plata] logout falló:", error);
+  }
   return redirect("/login?salida=1");
 }
 
 export async function signup(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    return await runSignup(formData);
+  } catch (error) {
+    if (isRedirectError(error)) throw error;
+    console.error("[plata] signup falló:", error);
+    return { ok: false, message: AUTH_UNEXPECTED };
+  }
+}
+
+async function runSignup(formData: FormData): Promise<ActionState> {
   const name = str(formData, "name");
   const email = str(formData, "email").trim().toLowerCase();
   const password = str(formData, "password");
@@ -291,7 +313,7 @@ export async function signup(_prev: ActionState, formData: FormData): Promise<Ac
   // Validación temprana: verificar si el correo ya está registrado
   const existingUser = await prisma.user.findUnique({ where: { email } });
   if (existingUser) {
-    return { ok: false, message: "Este email ya está registrado. ¿Ya tenés una cuenta? Ingresá con tus datos." };
+    return { ok: false, message: "Este email ya está registrado. ¿Ya tienes una cuenta? Ingresa con tus datos." };
   }
 
   // 5 registros por hora por IP: frena el spam de códigos y el abuso de Brevo.
@@ -332,6 +354,16 @@ export async function signup(_prev: ActionState, formData: FormData): Promise<Ac
 
 export async function verifySignup(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const email = str(formData, "email").trim().toLowerCase();
+  try {
+    return await runVerifySignup(formData, email);
+  } catch (error) {
+    if (isRedirectError(error)) throw error;
+    console.error("[plata] verifySignup falló:", error);
+    return { ok: false, step: "verify", email, message: AUTH_UNEXPECTED };
+  }
+}
+
+async function runVerifySignup(formData: FormData, email: string): Promise<ActionState> {
   const code = str(formData, "code").replace(/\D/g, "");
   if (code.length !== 6) {
     return { ok: false, step: "verify", email, message: "El código son 6 dígitos." };
@@ -359,7 +391,7 @@ export async function verifySignup(_prev: ActionState, formData: FormData): Prom
       ok: false,
       step: "verify",
       email,
-      message: "Demasiados intentos con ese código. Empezá el registro de nuevo.",
+      message: "Demasiados intentos con ese código. Empez el registro de nuevo.",
     };
   }
 
@@ -394,6 +426,11 @@ export async function verifySignup(_prev: ActionState, formData: FormData): Prom
   });
   await prisma.pendingSignup.deleteMany({ where: { email } });
 
+  // Verificado: arrancamos la sesión en el mismo request y lo mandamos directo al
+  // onboarding. Antes no se creaba sesión tras el alta, así que la persona llegaba
+  // sin autenticarse y el /login le mostraba la alerta de "Sesión cerrada".
+  await createSession(user.id, randomUUID());
+
   // Redirigir al onboarding en lugar de entrar directo al panel
   redirect("/onboarding?registroExitoso=true");
 }
@@ -403,9 +440,18 @@ export async function resendSignupCode(
   formData: FormData,
 ): Promise<ActionState> {
   const email = str(formData, "email").trim().toLowerCase();
+  try {
+    return await runResendSignupCode(email);
+  } catch (error) {
+    console.error("[plata] resendSignupCode falló:", error);
+    return { ok: false, step: "verify", email, message: AUTH_UNEXPECTED };
+  }
+}
+
+async function runResendSignupCode(email: string): Promise<ActionState> {
   const pending = await prisma.pendingSignup.findUnique({ where: { email } });
   if (!pending) {
-    return { ok: false, step: "verify", email, message: "Empezá el registro de nuevo." };
+    return { ok: false, step: "verify", email, message: "Empez el registro de nuevo." };
   }
 
   const elapsed = (Date.now() - pending.lastSentAt.getTime()) / 1000;
@@ -443,6 +489,16 @@ export async function resendSignupCode(
 }
 
 export async function login(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    return await runLogin(formData);
+  } catch (error) {
+    if (isRedirectError(error)) throw error;
+    console.error("[plata] login falló:", error);
+    return { ok: false, message: AUTH_UNEXPECTED };
+  }
+}
+
+async function runLogin(formData: FormData): Promise<ActionState> {
   const email = str(formData, "email").trim().toLowerCase();
   const password = str(formData, "password");
 

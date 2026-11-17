@@ -1,60 +1,54 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 
 import { PageHeader } from "@/components/page-header";
-import { IconPlus, IconTarget, IconWallet, IconInfo } from "@/components/icons";
-import { formatMoney } from "@/lib/money";
+import { Toast } from "@/components/toast";
 import { completarOnboarding } from "@/app/onboarding/actions";
 
- // Formatea número con separadores de miles en formato COP (punto): 1.200.000
- // Retorna solo dígitos para almacenamiento interno.
- function formatCurrencyInput(value: string): string {
-   // Limpiar puntos y dígitos no numéricos excepto el signo menos
-   const clean = value.replace(/\./g, "").replace(/[^0-9-]/g, "");
-   if (!clean) return "";
-   // Agregar separadores de miles con punto (formato COP)
-   let num = clean;
-   while (/^\d\d\d/.test(num)) {
-     num = num.replace(/^(\d\d\d)/, "$1.");
-   }
-   return num;
- }
+function formatCurrencyInput(value: string): string {
+  // Limpiar puntos y dígitos no numéricos excepto el signo menos
+  const clean = value.replace(/\./g, "").replace(/[^0-9-]/g, "");
+  if (!clean) return "";
+  // Agregar separadores de miles con punto (formato COP) sin bucle infinito.
+  const sign = clean.startsWith("-") ? "-" : "";
+  const digits = clean.replace("-", "");
+  const grouped = digits.replace(/(\d)(?=(\d{3})+$)/g, "$1.");
+  return sign + grouped;
+}
 
 export default function OnboardingPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [step, setStep] = useState(1);
+  const registroExitoso = searchParams.get("registroExitoso") === "true";
+  // El paso inicial sale de ?step=N (por ejemplo al volver atrás desde otro
+  // lado). Se deriva una sola vez en el inicializador de useState: hacerlo con
+  // un useEffect provocaba renders en cascada.
+  const [step, setStep] = useState(() => {
+    const p = Number(searchParams.get("step"));
+    return Number.isInteger(p) && p >= 1 && p <= 4 ? p : 1;
+  });
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Referencia al formulario real del paso: con varias forms en la página,
+  // document.querySelector('form') podía agarrar la equivocada.
+  const formRef = useRef<HTMLFormElement>(null);
   const [stepData, setStepData] = useState<{
     ingresoMensual?: number;
     frecuencia?: string;
     categorias?: string[];
     metodoPago?: "ahorro" | "tarjeta";
     nombreMetodo?: string;
+    categoriaPersonalizada?: string;
     limitePresupuesto?: Record<string, number>;
   }>({});
 
-  // Cargar paso desde URL
-  useEffect(() => {
-    const p = searchParams.get("step");
-    if (p && Number(p) >= 1 && Number(p) <= 4) {
-      setStep(Number(p));
-    }
-  }, [searchParams]);
-
-  // Manejar envío parcial y avanzar de paso
-  const handleNext = async () => {
-    // Primero, obtener los datos del formulario actual y acumularlos
-    const form = document.querySelector('form') as HTMLFormElement || undefined;
-    if (form) {
-      const formData = new FormData(form);
-      await onStepSubmit(formData);
-    }
-    // Luego avanzar al siguiente paso
-    setStep((prev) => Math.min(prev + 1, 4));
+  // Manejar envío parcial y avanzar de paso.
+  // Ojo: onStepSubmit ya hace el setStep. Si además avanzamos acá, se saltan
+  // pasos (era el bug de "Siguiente" saltando del 1 al 3).
+  const handleNext = () => {
+    if (formRef.current) onStepSubmit(new FormData(formRef.current));
   };
 
   const back = () => {
@@ -62,7 +56,7 @@ export default function OnboardingPage() {
   };
 
   // Manejar envío parcial (guardar paso actual)
-  const onStepSubmit = async (formData: FormData) => {
+  const onStepSubmit = (formData: FormData) => {
     const nuevoData = { ...stepData };
 
     if (step === 1) {
@@ -75,24 +69,16 @@ export default function OnboardingPage() {
       const cats: string[] = [];
       const checkItems = formData.getAll("categoria") as string[];
       cats.push(...checkItems);
-      const custom = formData.get("categoriaPersonalizada") as string || "";
+      const custom = (formData.get("categoriaPersonalizada") as string || "").trim();
       if (custom && !cats.includes(custom)) cats.push(custom);
       nuevoData.categorias = cats;
+      if (custom) nuevoData.categoriaPersonalizada = custom;
     }
     if (step === 3) {
       const metodo = formData.get("metodoPago") as string || "";
       nuevoData.metodoPago = metodo as "ahorro" | "tarjeta";
       const nombre = formData.get("nombreMetodo") as string || "";
       if (nombre) nuevoData.nombreMetodo = nombre;
-    }
-    if (step === 4) {
-      const limites: Record<string, number> = {};
-      const categorias = stepData.categorias || [];
-      categorias.forEach((cat: string) => {
-        const lim = formData.get(`limite_${cat}`) as string || "0";
-        limites[cat] = parseInt(lim.replace(/[^0-9]/g, ""), 10) || 0;
-      });
-      nuevoData.limitePresupuesto = limites;
     }
 
     setStepData(nuevoData);
@@ -131,19 +117,25 @@ export default function OnboardingPage() {
       formData.set("nombreMetodo", stepData.nombreMetodo);
     }
     
-    // Límites de presupuesto
-    if (stepData.limitePresupuesto) {
-      Object.entries(stepData.limitePresupuesto).forEach(([cat, lim]) => {
-        formData.set(`limite_${cat}`, String(lim));
-      });
+    // Límites del paso 4: se leen del formulario visible porque este paso se
+    // cierra con "Finalizar configuración" y nunca pasa por onStepSubmit.
+    if (formRef.current) {
+      for (const [clave, valor] of new FormData(formRef.current).entries()) {
+        if (clave.startsWith("limite_")) formData.set(clave, String(valor));
+      }
     }
-    
-    const result = await completarOnboarding(formData as unknown as FormData);
-    setSubmitting(false);
-    if (result.ok) {
-      router.push("/");
-    } else {
-      setSubmitError(result.message);
+
+    try {
+      const result = await completarOnboarding(formData);
+      if (result.ok) {
+        router.push("/");
+      } else {
+        setSubmitError(result.message);
+      }
+    } catch {
+      setSubmitError("No pudimos guardar tu configuración. Probá de nuevo.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -201,8 +193,9 @@ export default function OnboardingPage() {
             placeholder={`Ej: 20000`}
             defaultValue={stepData.limitePresupuesto?.[cat] || ""}
             onInput={(e) => {
-              const formatted = formatCurrencyInput(e.target.value);
-              e.target.value = formatted;
+              const target = e.target as HTMLInputElement;
+              const formatted = formatCurrencyInput(target.value);
+              target.value = formatted;
             }}
           />
           <p className="text-xs text-muted tip">Límite mensual en pesos</p>
@@ -211,7 +204,11 @@ export default function OnboardingPage() {
     : [];
 
   return (
-    <>
+    <div>
+      {registroExitoso ? (
+        <Toast message="¡Registro exitoso! Ya podés empezar a configurar tu cuenta." tone="success" />
+      ) : null}
+
       <PageHeader
         title="Bienvenido a Plata"
         description="Vamos a configurar tu cuenta para que empieces a llevar el control de tus finanzas. Todo esto podrás editarlo o borrarlo después desde la aplicación."
@@ -227,13 +224,16 @@ export default function OnboardingPage() {
 
             <p className="text-muted mb-6">{pasoActual.body}</p>
 
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              onStepSubmit(new FormData(e.target));
-            }}>
+            <form
+              ref={formRef}
+              onSubmit={(e) => {
+                e.preventDefault();
+                onStepSubmit(new FormData(e.currentTarget));
+              }}
+            >
 
               {step === 1 && (
-                <>
+                <div key="step-1">
                   <div className="mb-4">
                     <label className="label text-muted mb-1">Ingreso mensual</label>
                     <input
@@ -243,10 +243,12 @@ export default function OnboardingPage() {
                       placeholder="Ej: 50000"
                       required
                       onInput={(e) => {
-                        const formatted = formatCurrencyInput(e.target.value);
-                        e.target.value = formatted;
+                        const target = e.target as HTMLInputElement;
+                        const formatted = formatCurrencyInput(target.value);
+                        target.value = formatted;
                       }}
                     />
+                  </div>
                   <div className="mb-4">
                     <label className="label text-muted mb-1">Frecuencia</label>
                     <select name="frecuencia" className="input">
@@ -259,37 +261,30 @@ export default function OnboardingPage() {
                   <p className="text-xs text-muted tip">
                     {pasoActual.tip}
                   </p>
-                </>
+                </div>
               )}
 
               {step === 2 && (
-                <>
+                <div key="step-2">
                   <p className="text-muted text-sm mb-4">Elegí las categorías que aplican:</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {/* Categorías predefinidas como chips seleccionables */}
-                    <div className="grid grid-cols-2 gap-2">
-                      {["Alimentación", "Transporte", "Hogar", "Servicios", "Salud", "Entretenimiento", "Ropa", "Educación", "Suscripciones"].map((cat) => (
-                        <div
-                          key={cat}
-                          className={["rounded-lg border border-line/50 p-2", stepData.categorias?.includes(cat) ? "bg-accent" : "text-muted" ].join(" ")}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => {
-                            setStepData((prev) => {
-                              const categorias = prev.categorias || [];
-                              if (categorias.includes(cat)) {
-                                return { ...prev, categorias: categorias.filter((c) => c !== cat) };
-                              } else {
-                                return { ...prev, categorias: [...categorias, cat] };
-                              }
-                            });
-                          }}
-                        >
-                          <span className="font-medium">{cat}</span>
-                        </div>
-                      ))}
-                    </div>
-                <div className="mb-4">
+                  <div className="grid grid-cols-2 gap-2">
+                    {["Alimentación", "Transporte", "Hogar", "Servicios", "Salud", "Entretenimiento", "Ropa", "Educación", "Suscripciones"].map((cat) => (
+                      <label
+                        key={cat}
+                        className="flex cursor-pointer items-center rounded-lg border border-line/50 p-2 text-muted transition-colors hover:border-accent/40 has-[:checked]:border-accent has-[:checked]:bg-accent/20 has-[:checked]:text-foreground"
+                      >
+                        <input
+                          type="checkbox"
+                          name="categoria"
+                          value={cat}
+                          defaultChecked={stepData.categorias?.includes(cat)}
+                          className="sr-only"
+                        />
+                        <span className="font-medium">{cat}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="mb-4">
                     <label className="label text-muted mb-1">Otra categoría (opcional)</label>
                     <input
                       type="text"
@@ -301,11 +296,11 @@ export default function OnboardingPage() {
                   <p className="text-xs text-muted tip">
                     {pasoActual.tip}
                   </p>
-                </>
+                </div>
               )}
 
               {step === 3 && (
-                <>
+                <div key="step-3">
                   <div className="mb-4">
                     <label className="label text-muted mb-1">Método principal</label>
                     <select name="metodoPago" className="input">
@@ -325,17 +320,17 @@ export default function OnboardingPage() {
                   <p className="text-xs text-muted tip">
                     {pasoActual.tip}
                   </p>
-                </>
+                </div>
               )}
 
               {step === 4 && (
-                <>
+                <div key="step-4">
                   <p className="text-muted text-sm mb-4">Asigná límites mensuales a tus categorías:</p>
                   {camposLimites}
                   <p className="text-xs text-muted tip">
                     {pasoActual.tip}
                   </p>
-                </>
+                </div>
               )}
 
               <div className="mt-6">
@@ -373,9 +368,11 @@ export default function OnboardingPage() {
 
       </main>
 
-      {submitError && (
-        <p className="mt-4 text-danger text-sm text-center">{submitError}</p>
-      )}
-    </>
+      <div className="mt-4">
+        {submitError && (
+          <p className="mt-4 text-danger text-sm text-center">{submitError}</p>
+        )}
+      </div>
+    </div>
   );
 }
