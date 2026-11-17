@@ -3,7 +3,7 @@
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
+  && apt-get install -y --no-install-recommends ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -11,7 +11,6 @@ RUN npm ci
 FROM node:22-bookworm-slim AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV DATABASE_URL="file:/data/plata.db"
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npx prisma generate
@@ -27,6 +26,7 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app ./
-RUN mkdir -p /data
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma migrate deploy && node prisma/bootstrap.mjs && npm start"]
+# DATABASE_URL tiene que venir del entorno (Postgres). Las migraciones se aplican
+# al arrancar; `npm run db:bootstrap` es un paso manual de instalación.
+CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]

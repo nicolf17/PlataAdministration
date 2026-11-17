@@ -21,19 +21,21 @@ Finanzas personales sin planillas. Registrá cuentas, ingresos, gastos en efecti
 | Framework | Next.js 16 (App Router, Server Actions) |
 | Lenguaje | TypeScript |
 | UI | Tailwind CSS v4 |
-| Datos | SQLite + Prisma 7 (driver adapter `better-sqlite3`) |
+| Datos | Postgres + Prisma 7 (driver adapter `@prisma/adapter-pg`) |
 | Validación | Zod |
 
 ## Empezar
 
-Requisitos: **Node.js 22 o superior** (Prisma 7 lo exige).
+Requisitos: **Node.js 22 o superior** (Prisma 7 lo exige) y una base **Postgres**.
 
 ```bash
 npm install
-cp .env.example .env      # en Windows: copy .env.example .env
+copy .env.example .env    # y poné tu DATABASE_URL de Postgres
 npm run db:setup
 npm run dev
 ```
+
+Si no tenés Postgres a mano, Neon o Supabase dan una base gratis en dos minutos: creás el proyecto, copiás la connection string (con `sslmode=require`) y listo.
 
 Abrí [http://localhost:3000](http://localhost:3000).
 
@@ -48,6 +50,8 @@ El `seed` crea 4 cuentas, 2 tarjetas, categorías, presupuestos y ~92 movimiento
 | `npm run typecheck` | TypeScript sin emitir |
 | `npm run db:setup` | Genera el cliente, aplica migraciones y siembra datos demo (primera vez) |
 | `npm run db:migrate` | Crea y aplica migraciones |
+| `npm run db:bootstrap` | Siembra mínima idempotente: 1 usuario, cuentas, categorías y presupuestos |
+| `npm run db:import-sqlite` | Importa a Postgres el export de la vieja base SQLite |
 | `npm run db:seed` | Carga los datos demo |
 | `npm run db:studio` | Abre Prisma Studio |
 | `npm run db:reset` | Borra la DB, re-migra y re-siembra |
@@ -90,9 +94,11 @@ Cada recomendación nace de un número auditable. El motor (`src/lib/recommendat
 | Presupuesto | uso ≥ 80% (warning) / > 100% (danger) |
 | Concentración | una categoría ≥ 35% del gasto total |
 
-### 5. SQLite primero
+### 5. Postgres desde el día uno
 
-Es una app personal: SQLite alcanza y sobra, corre sin servidor y la DB es un archivo. El acceso está aislado detrás de Prisma, así que migrar a Postgres/Turso para sincronizar entre dispositivos es un cambio de adapter, no una reescritura.
+La app corre en serverless, donde el filesystem es efímero y de solo lectura: SQLite no sobrevive. Postgres lo resuelve sin cambiar el modelo, y el acceso sigue aislado detrás de Prisma (`src/lib/db.ts`), así que el día que quieras cambiar de proveedor es un cambio de connection string.
+
+El cliente Prisma es **perezoso** (un `Proxy`): la conexión se abre en el primer acceso a un modelo, no al importar el módulo. Así, si falta `DATABASE_URL`, el error cae dentro del `try/catch` de la action y ves un mensaje amable en vez de un 500.
 
 ## Estructura
 
@@ -124,8 +130,7 @@ src/
 - [ ] Importación de extractos CSV
 - [ ] Gráfico de evolución mensual
 - [ ] Metas de ahorro
-- [ ] Multiusuario + Postgres/Turso para sincronizar
-- [ ] PWA para usar desde el celular
+- [ ] Sincronización offline / PWA para usar desde el celular
 
 ## Licencia
 

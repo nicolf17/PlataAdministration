@@ -1,4 +1,4 @@
-const CACHE = "plata-static-v7";
+const CACHE = "plata-static-v8";
 const OFFLINE = "/offline.html";
 const PRECACHE = [
   OFFLINE,

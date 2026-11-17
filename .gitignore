@@ -39,6 +39,8 @@ yarn-error.log*
 /prisma/*.db
 /prisma/*.db-*
 /prisma/*.db-journal
+# Export temporal de datos de SQLite (contiene datos personales).
+/prisma/sqlite-export.json
 
 # vercel
 .vercel
@@ -46,3 +48,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.vercel
+.env*

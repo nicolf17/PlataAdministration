@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
-// Alerta emergente (toast) única, anclada arriba.
+// Alerta emergente (toast) única, anclada arriba a la derecha para que no tape
+// títulos ni contenido principal de la pantalla. En mobile respeta el safe area.
 // Entra desde arriba hacia abajo y sale de vuelta hacia arriba, así no tapa los
 // controles de abajo (en el celular ahí vive la barra de navegación).
 export type ToastTone = "success" | "error";
@@ -55,11 +56,11 @@ export function Toast({
       : "border-danger/40 bg-surface text-danger";
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex justify-center px-3 pt-[max(3.75rem,calc(env(safe-area-inset-top)+3.25rem))]">
+    <div className="pointer-events-none fixed top-[max(1rem,calc(env(safe-area-inset-top)+0.75rem))] right-4 z-50 flex justify-end">
       <div
         role={tone === "error" ? "alert" : "status"}
         aria-live={tone === "error" ? "assertive" : "polite"}
-        className={`pointer-events-auto w-full max-w-sm rounded-xl border p-3 text-center text-[13px] font-medium ${palette} ${
+        className={`pointer-events-auto w-[calc(100%-2rem)] max-w-sm rounded-xl border p-3 text-left text-[13px] font-medium shadow-lg ${palette} ${
           leaving ? "animate-toast-out" : "animate-toast-in"
         }`}
       >

@@ -66,7 +66,7 @@ export async function Shell({ children }: { children: React.ReactNode }) {
             <p className="truncate text-[11px] text-muted">{user.email}</p>
           </div>
           <p className="mb-3 text-[11px] leading-relaxed text-muted">
-            Tus datos en un servidor privado propio, en SQLite.
+            Tus datos en una base Postgres privada.
           </p>
           <UserMenu variant="full" />
         </div>

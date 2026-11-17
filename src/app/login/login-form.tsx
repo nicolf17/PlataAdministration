@@ -5,6 +5,7 @@ import { useActionState, useState } from "react";
 
 import { login } from "@/app/actions";
 import type { ActionState } from "@/app/actions";
+import { IconEye, IconEyeOff } from "@/components/icons";
 import { Toast } from "@/components/toast";
 
 export function LoginForm({ loggedOut = false, registroExitoso = false }: { loggedOut?: boolean; registroExitoso?: boolean }) {
@@ -37,7 +38,7 @@ export function LoginForm({ loggedOut = false, registroExitoso = false }: { logg
       />
 
       <h1 className="text-xl font-semibold tracking-tight">Bienvenido a plata</h1>
-      <p className="mt-1 text-sm text-muted">Iniciá sesión para ver tus finanzas.</p>
+      <p className="mt-1 text-sm text-muted">Inicia sesión para ver tus finanzas.</p>
 
       <form
         action={formAction}
@@ -50,29 +51,34 @@ export function LoginForm({ loggedOut = false, registroExitoso = false }: { logg
           </label>
           <input id="email" name="email" type="email" autoComplete="email" required className="input" />
         </div>
-        <div className="relative">
+        <div>
           <label className="label" htmlFor="password">
             Contraseña
           </label>
-          <div className="absolute right-2 top-1/2 -translate-y-1/2">
+          <div className="relative">
+            <input
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              required
+              className="input pr-12"
+            />
             <button
-              id="toggle-password"
               type="button"
-              aria-label="Mostrar contraseña"
-              className="btn btn-ghost text-[12px] px-2 py-1 rounded-md hover:bg-surface-2"
+              onClick={() => setShowPassword((visible) => !visible)}
+              aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+              aria-pressed={showPassword}
+              title={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+              className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted transition hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             >
-              {showPassword ? 'Ocultar' : 'Mostrar'}
+              {showPassword ? (
+                <IconEyeOff className="h-5 w-5" />
+              ) : (
+                <IconEye className="h-5 w-5" />
+              )}
             </button>
           </div>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            className="input"
-            aria-describedby="toggle-password"
-          />
         </div>
 
         <button type="submit" className="btn btn-primary w-full" disabled={pending}>
@@ -81,7 +87,7 @@ export function LoginForm({ loggedOut = false, registroExitoso = false }: { logg
       </form>
 
       <p className="mt-4 text-center text-[13px] text-muted">
-        ¿No tenés cuenta?{" "}
+        ¿No tienes cuenta?{" "}
         <Link href="/signup" className="font-semibold text-accent underline">
           Crear una
         </Link>

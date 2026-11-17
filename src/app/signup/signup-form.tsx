@@ -6,6 +6,7 @@ import { useActionState, useEffect, useState } from "react";
 
 import { resendSignupCode, signup, verifySignup } from "@/app/actions";
 import type { ActionState } from "@/app/actions";
+import { IconEye, IconEyeOff } from "@/components/icons";
 import { Toast, type ToastTone } from "@/components/toast";
 
 type Step = "signup" | "verify" | "resend";
@@ -75,7 +76,7 @@ export function SignupForm() {
         <>
           <h1 className="text-xl font-semibold tracking-tight">Crear cuenta</h1>
           <p className="mt-1 text-sm text-muted">
-            Empezá a trackear tus finanzas. Te mandamos un código para confirmar tu correo.
+            Empez a trackear tus finanzas. Te mandamos un código para confirmar tu correo.
           </p>
 
           <form
@@ -95,30 +96,35 @@ export function SignupForm() {
               </label>
               <input id="email" name="email" type="email" autoComplete="email" required className="input" />
             </div>
-            <div className="relative">
+            <div>
               <label className="label" htmlFor="password">
                 Contraseña
               </label>
-              <div className="absolute right-2 top-1/2 -translate-y-1/2">
+              <div className="relative">
+                <input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  minLength={6}
+                  required
+                  className="input pr-12"
+                />
                 <button
-                  id="toggle-password"
                   type="button"
-                  aria-label="Mostrar contraseña"
-                  className="btn btn-ghost text-[12px] px-2 py-1 rounded-md hover:bg-surface-2"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  aria-pressed={showPassword}
+                  title={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted transition hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
                 >
-                  {showPassword ? 'Ocultar' : 'Mostrar'}
+                  {showPassword ? (
+                    <IconEyeOff className="h-5 w-5" />
+                  ) : (
+                    <IconEye className="h-5 w-5" />
+                  )}
                 </button>
               </div>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                minLength={6}
-                required
-                className="input"
-                aria-describedby="toggle-password"
-              />
               <p className="mt-1 text-[11px] text-muted">Mínimo 6 caracteres.</p>
             </div>
 
@@ -182,9 +188,9 @@ export function SignupForm() {
       )}
 
       <p className="mt-4 text-center text-[13px] text-muted">
-        ¿Ya tenés cuenta?{" "}
+        ¿Ya tienes cuenta?{" "}
         <Link href="/login" className="font-semibold text-accent underline">
-          Ingresá
+          Inicia sesión
         </Link>
       </p>
     </div>
