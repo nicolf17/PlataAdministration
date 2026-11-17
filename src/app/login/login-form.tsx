@@ -61,8 +61,7 @@ export function LoginForm({ loggedOut = false, registroExitoso = false }: { logg
               aria-label="Mostrar contraseña"
               className="btn btn-ghost text-[12px] px-2 py-1 rounded-md hover:bg-surface-2"
             >
-              {showPassword ? '<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M1 21a5 5 0 0 1 5-5H5a5 5 0 0 1 5 5zM3 13a4 4 0 0 0 4-4H7a4 4 0 0 0 4 4v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a4 4 0 0 0-4 4v-2"/></svg>' : '<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M17.94 17.94a1 1 0 0 1 0 1.41l-3 3a1 1 0 0 1-1.41 0l-3-3a1 1 0 0 1 0-1.41l3-3a1 1 0 0 1 1.41 0zM7.93 7.93a1 1 0 0 1 1.41 0l3 3a1 1 0 0 1-1.41 1.41l-3-3a1 1 0 0 1-1.41-1.41l3 3zM21 3a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v3.585l5.015 5.015a.5.5 0 0 1-.708.708l-7.916-7.916a.5.5 0 0 1 0-.822l7.916 7.916a.5.5 0 0 1 .708.708zM3 21a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2H3z"/></svg>'
-              />
+              {showPassword ? 'Ocultar' : 'Mostrar'}
             </button>
           </div>
           <input
